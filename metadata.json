@@ -1,0 +1,6 @@
+{
+  "name": "ZapDeck",
+  "description": "Extraia contatos de cartões de visita usando IA e envie mensagens automáticas e personalizadas via WhatsApp.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
