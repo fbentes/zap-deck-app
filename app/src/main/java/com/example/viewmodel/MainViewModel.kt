@@ -18,6 +18,7 @@ import com.example.data.ContactRepository
 import com.example.BuildConfig
 import com.example.utils.CardBeamTransferHelper
 import com.example.utils.ContactSystemSync
+import com.example.utils.OfflineCardScanner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -83,9 +84,18 @@ class MainViewModel(
     // Scan operations state
     var isScanning by mutableStateOf(false)
         private set
+    var isProcessingPhoto by mutableStateOf(false)
+        private set
+    var processingStatusText by mutableStateOf("Preparando imagem...")
+        private set
     var scanError by mutableStateOf<String?>(null)
         private set
     var capturedImageBase64 by mutableStateOf<String?>(null)
+        private set
+    private var capturedBitmap: Bitmap? = null
+
+    // "offline" = On-device (ML Kit, 100% sem internet), "gemini" = IA Nuvem Gemini
+    var scanEngine by mutableStateOf("offline")
         private set
 
     // Extracted Fields State (for preview & editing BEFORE saving)
@@ -155,6 +165,8 @@ class MainViewModel(
 
     // Set captured image and crop/resize it to be efficient to send to Gemini & store in DB
     fun processSelectedImage(bitmap: Bitmap) {
+        isProcessingPhoto = true
+        processingStatusText = "Processando foto do cartão..."
         viewModelScope.launch(Dispatchers.Default) {
             // 1. Check if the image contains a standard ZapDeck / vCard QR Code first!
             val qrText = CardBeamTransferHelper.decodeQrFromBitmap(bitmap)
@@ -163,6 +175,7 @@ class MainViewModel(
                     ?: CardBeamTransferHelper.vCardToContact(qrText)
                 if (directContact != null && (directContact.name.isNotBlank() || directContact.primaryPhone.isNotBlank())) {
                     withContext(Dispatchers.Main) {
+                        isProcessingPhoto = false
                         handleReceivedContact(directContact)
                     }
                     return@launch
@@ -172,6 +185,7 @@ class MainViewModel(
             val resized = resizeBitmap(bitmap, 800) // target max 800px width/height for fast response and smooth storage
             val base64 = bitmapToBase64(resized)
             withContext(Dispatchers.Main) {
+                capturedBitmap = resized
                 capturedImageBase64 = base64
                 // Clear previous results upon capturing new image
                 parsedName = ""
@@ -181,14 +195,16 @@ class MainViewModel(
                 parsedObservations = ""
                 parsedInstagram = ""
                 scanError = null
-                // Directly trigger Gemini extraction on captured image
-                analyzeCardImage()
+                processingStatusText = "Identificando dados do cartão..."
+                // Default: Try fast 100% on-device (offline) scanning first
+                analyzeCardImage(preferOffline = true)
             }
         }
     }
 
     fun clearScannedState() {
         capturedImageBase64 = null
+        capturedBitmap = null
         parsedName = ""
         parsedPrimaryPhone = ""
         parsedSecondaryPhone = ""
@@ -197,20 +213,69 @@ class MainViewModel(
         parsedInstagram = ""
         scanError = null
         isScanning = false
+        isProcessingPhoto = false
+        scanEngine = "offline"
     }
 
-    // Call Gemini API to analyze the card image
-    fun analyzeCardImage() {
-        val base64Image = capturedImageBase64 ?: return
+    // Analyzes card image. If preferOffline is true, uses On-Device Google ML Kit (100% sem internet).
+    // If preferOffline is false, or if forced, queries Gemini API.
+    fun analyzeCardImage(preferOffline: Boolean = true) {
+        val base64Image = capturedImageBase64 ?: run {
+            isProcessingPhoto = false
+            return
+        }
+        val currentBitmap = capturedBitmap
         isScanning = true
+        isProcessingPhoto = true
         scanError = null
+        scanEngine = if (preferOffline) "offline" else "gemini"
+        processingStatusText = if (preferOffline) "Extraindo texto localmente (offline)..." else "Analisando cartão com IA Gemini..."
 
         viewModelScope.launch(Dispatchers.IO) {
+            if (preferOffline && currentBitmap != null) {
+                try {
+                    Log.i("MainViewModel", "Iniciando extração On-Device (Offline) via ML Kit...")
+                    val offlineResult = OfflineCardScanner.analyzeCardOffline(currentBitmap)
+                    
+                    // If offline scan returned something useful (at least a name or a phone), use it!
+                    if (offlineResult.name.isNotBlank() || offlineResult.primaryPhone.isNotBlank()) {
+                        withContext(Dispatchers.Main) {
+                            parsedName = offlineResult.name ?: ""
+                            parsedPrimaryPhone = offlineResult.primaryPhone ?: ""
+                            parsedSecondaryPhone = offlineResult.secondaryPhone ?: ""
+                            parsedAddress = offlineResult.address ?: ""
+                            parsedObservations = offlineResult.observations ?: ""
+                            parsedInstagram = offlineResult.instagram ?: ""
+                            isScanning = false
+                            isProcessingPhoto = false
+                            scanEngine = "offline"
+                        }
+                        return@launch
+                    } else {
+                        Log.w("MainViewModel", "Scan offline não detectou campos com alta confiança. Tentando Gemini se houver chave e internet...")
+                        withContext(Dispatchers.Main) {
+                            processingStatusText = "Consultando IA Gemini para maior precisão..."
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w("MainViewModel", "Falha no scan offline: ${e.message}. Tentando Gemini como alternativa...", e)
+                }
+            }
+
+            // Fallback or explicit request for Gemini API
             try {
-                // Ensure internet Permission warning is verified
+                scanEngine = "gemini"
                 val apiKey = BuildConfig.GEMINI_API_KEY
                 if (apiKey == "MY_GEMINI_API_KEY" || apiKey.isEmpty()) {
-                    throw IllegalStateException("API Key do Gemini não está configurada no painel de Secrets!")
+                    // If no Gemini key is set, we still retain whatever offline scan did or inform the user
+                    withContext(Dispatchers.Main) {
+                        if (parsedName.isBlank() && parsedPrimaryPhone.isBlank()) {
+                            scanError = "Nenhum texto claro identificado no modo offline. Para enriquecer via IA Gemini online, configure a chave no painel de Secrets."
+                        }
+                        isScanning = false
+                        isProcessingPhoto = false
+                    }
+                    return@launch
                 }
 
                 val prompt = """
@@ -302,10 +367,12 @@ class MainViewModel(
                         parsedAddress = parsed.address ?: ""
                         parsedObservations = parsed.observations ?: ""
                         parsedInstagram = parsed.instagram ?: ""
+                        scanEngine = "gemini"
                     } else {
                         throw Exception("Não foi possível decodificar os dados retornados no JSON.")
                     }
                     isScanning = false
+                    isProcessingPhoto = false
                 }
 
             } catch (e: retrofit2.HttpException) {
@@ -326,13 +393,15 @@ class MainViewModel(
                     e.message()
                 }
                 withContext(Dispatchers.Main) {
-                    scanError = "Falha ao escanear o cartão: HTTP ${e.code()} - $errorMessage"
+                    scanError = "Falha ao consultar Gemini online: HTTP ${e.code()} - $errorMessage. Você pode preencher os dados manualmente ou tentar novamente."
                     isScanning = false
+                    isProcessingPhoto = false
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
-                    scanError = "Falha ao escanear o cartão: ${e.localizedMessage ?: e.message}"
+                    scanError = "Sem conexão ou falha ao escanear com Gemini: ${e.localizedMessage ?: e.message}"
                     isScanning = false
+                    isProcessingPhoto = false
                 }
             }
         }

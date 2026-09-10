@@ -273,7 +273,8 @@ fun MainScreen(viewModel: MainViewModel) {
                         IconButton(onClick = { showCardList = false }) {
                             Icon(
                                 imageVector = Icons.Default.ArrowBack,
-                                contentDescription = "Voltar para tela inicial"
+                                contentDescription = "Voltar para tela inicial",
+                                tint = Color.White
                             )
                         }
                     }
@@ -293,7 +294,8 @@ fun MainScreen(viewModel: MainViewModel) {
                         Text(
                             text = "ZapDeck",
                             fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.White
                         )
                     }
                 },
@@ -302,12 +304,12 @@ fun MainScreen(viewModel: MainViewModel) {
                         Icon(
                             imageVector = Icons.Default.Settings,
                             contentDescription = "Configurar meu nome",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = Color.White.copy(alpha = 0.9f)
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp)
+                    containerColor = com.example.ui.theme.BlueDeepNavy
                 )
             )
         }
@@ -343,6 +345,52 @@ fun MainScreen(viewModel: MainViewModel) {
                     showCardList = showCardList,
                     onShowCardListChanged = { showCardList = it }
                 )
+            }
+
+            if (viewModel.isProcessingPhoto && viewModel.capturedImageBase64 == null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.65f))
+                        .clickable(enabled = false) {},
+                    contentAlignment = Alignment.Center
+                ) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .padding(24.dp)
+                                .fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                color = com.example.ui.theme.ZapDeckPrimary,
+                                strokeWidth = 4.dp,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Text(
+                                text = "Processando foto capturada...",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = com.example.ui.theme.Slate900,
+                                textAlign = TextAlign.Center
+                            )
+                            Text(
+                                text = viewModel.processingStatusText.ifBlank { "Otimizando imagem e iniciando reconhecimento dos dados do cartão..." },
+                                fontSize = 13.sp,
+                                color = com.example.ui.theme.Slate500,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
             }
 
             if (showSettingsDialog) {
@@ -552,15 +600,7 @@ fun ScanReviewLayout(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFFF1F5F9),
-                        Color(0xFFFFFFFF),
-                        Color(0xFFE2E8F0)
-                    )
-                )
-            )
+            .background(brush = com.example.ui.theme.ZapDeckBlueGradient)
     ) {
         Column(
             modifier = Modifier
@@ -575,9 +615,9 @@ fun ScanReviewLayout(
                 .clickable { onBack() },
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.ArrowBack, contentDescription = "Voltar", tint = MaterialTheme.colorScheme.primary)
+            Icon(Icons.Default.ArrowBack, contentDescription = "Voltar", tint = Color.White)
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Cancelar e Voltar", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+            Text("Cancelar e Voltar", color = Color.White, fontWeight = FontWeight.Bold)
         }
 
         Card(
@@ -594,25 +634,102 @@ fun ScanReviewLayout(
             }
         }
 
-        if (viewModel.isScanning) {
+        if (viewModel.isScanning || viewModel.isProcessingPhoto) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f))
+                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f)),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(6.dp)
             ) {
                 Column(
                     modifier = Modifier
-                        .padding(16.dp)
+                        .padding(20.dp)
                         .fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                    Text(
-                        text = "A IA do Gemini está analisando o layout do cartão para extrair nome, telefones (detectando WhatsApp), Instagram, endereço e serviços de forma inteligente...",
-                        textAlign = TextAlign.Center,
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    CircularProgressIndicator(
+                        color = com.example.ui.theme.ZapDeckPrimary,
+                        strokeWidth = 4.dp,
+                        modifier = Modifier.size(42.dp)
                     )
+                    Text(
+                        text = if (viewModel.processingStatusText.isNotBlank()) {
+                            viewModel.processingStatusText
+                        } else if (viewModel.scanEngine == "offline") {
+                            "Reconhecimento de Texto On-Device (100% Offline via Google ML Kit)... Lendo o cartão sem precisar de internet."
+                        } else {
+                            "A IA do Gemini está analisando o layout do cartão para extrair nome, telefones (detectando WhatsApp), Instagram, endereço e serviços..."
+                        },
+                        textAlign = TextAlign.Center,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 14.sp,
+                        color = com.example.ui.theme.Slate900
+                    )
+                    Text(
+                        text = "Aguarde um instante enquanto estruturamos os dados...",
+                        textAlign = TextAlign.Center,
+                        fontSize = 12.sp,
+                        color = com.example.ui.theme.Slate500
+                    )
+                }
+            }
+        } else {
+            // Engine indicator badge and rescan buttons
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (viewModel.scanEngine == "offline") Color(0xFFE8F5E9) else Color(0xFFEDE7F6)
+                ),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (viewModel.scanEngine == "offline") Icons.Default.CheckCircle else Icons.Default.CloudQueue,
+                            contentDescription = null,
+                            tint = if (viewModel.scanEngine == "offline") Color(0xFF2E7D32) else Color(0xFF673AB7),
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = if (viewModel.scanEngine == "offline") "Leitura 100% Offline (ML Kit)" else "Leitura IA Online (Gemini)",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (viewModel.scanEngine == "offline") Color(0xFF1B5E20) else Color(0xFF512DA8)
+                        )
+                    }
+
+                    TextButton(
+                        onClick = {
+                            if (viewModel.scanEngine == "offline") {
+                                viewModel.analyzeCardImage(preferOffline = false)
+                            } else {
+                                viewModel.analyzeCardImage(preferOffline = true)
+                            }
+                        },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (viewModel.scanEngine == "offline") "Tentar com Gemini" else "Repetir Offline",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
         }
@@ -622,85 +739,159 @@ fun ScanReviewLayout(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
             ) {
-                Text(
-                    text = err,
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.padding(12.dp),
-                    fontSize = 13.sp
-                )
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = err,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        fontSize = 13.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = { viewModel.analyzeCardImage(preferOffline = true) },
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text("Ler no Modo Offline (ML Kit)", fontSize = 11.sp)
+                        }
+                    }
+                }
             }
         }
 
         Text(
             text = "Revisar dados estruturados",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.secondary,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = Color.White,
             modifier = Modifier.padding(top = 4.dp)
         )
 
-        OutlinedTextField(
-            value = viewModel.parsedName,
-            onValueChange = { viewModel.parsedName = it },
-            label = { Text("Nome:") },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
-            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) }
-        )
+        // Nome
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Nome:",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            OutlinedTextField(
+                value = viewModel.parsedName,
+                onValueChange = { viewModel.parsedName = it },
+                placeholder = { Text("Nome do contato ou empresa", color = com.example.ui.theme.Slate400) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = zapDeckTextFieldColors(),
+                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = com.example.ui.theme.Slate700) }
+            )
+        }
 
-        OutlinedTextField(
-            value = viewModel.parsedPrimaryPhone,
-            onValueChange = { viewModel.parsedPrimaryPhone = it },
-            label = { Text("Telefone principal (WhatsApp / Mensagens):") },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-            leadingIcon = { Icon(painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_whatsapp_custom), contentDescription = null, tint = Color.Unspecified, modifier = Modifier.size(24.dp)) },
-            supportingText = { Text("Definido prioritariamente como o telefone associado ao WhatsApp no cartão.") }
-        )
+        // Telefone Principal
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Telefone principal (WhatsApp / Mensagens):",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            OutlinedTextField(
+                value = viewModel.parsedPrimaryPhone,
+                onValueChange = { viewModel.parsedPrimaryPhone = it },
+                placeholder = { Text("DDD + Número WhatsApp", color = com.example.ui.theme.Slate400) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = zapDeckTextFieldColors(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                leadingIcon = { Icon(painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_whatsapp_custom), contentDescription = null, tint = Color.Unspecified, modifier = Modifier.size(24.dp)) },
+                supportingText = { Text("Definido prioritariamente como o telefone associado ao WhatsApp no cartão.") }
+            )
+        }
 
-        OutlinedTextField(
-            value = viewModel.parsedSecondaryPhone,
-            onValueChange = { viewModel.parsedSecondaryPhone = it },
-            label = { Text("Telefone secundário (Fixo / Alternativo):") },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-            leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) }
-        )
+        // Telefone Secundário
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Telefone secundário (Fixo / Alternativo):",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            OutlinedTextField(
+                value = viewModel.parsedSecondaryPhone,
+                onValueChange = { viewModel.parsedSecondaryPhone = it },
+                placeholder = { Text("Telefone fixo ou alternativo", color = com.example.ui.theme.Slate400) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = zapDeckTextFieldColors(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = com.example.ui.theme.Slate700) }
+            )
+        }
 
-        OutlinedTextField(
-            value = viewModel.parsedInstagram,
-            onValueChange = { viewModel.parsedInstagram = it },
-            label = { Text("Instagram (perfil, arroba ou link):") },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
-            leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFFE1306C)) },
-            supportingText = { Text("Perfil de Instagram extraído do cartão de visita.") }
-        )
+        // Instagram
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Instagram (perfil, arroba ou link):",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            OutlinedTextField(
+                value = viewModel.parsedInstagram,
+                onValueChange = { viewModel.parsedInstagram = it },
+                placeholder = { Text("@perfil ou link", color = com.example.ui.theme.Slate400) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = zapDeckTextFieldColors(),
+                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFFE1306C)) },
+                supportingText = { Text("Perfil de Instagram extraído do cartão de visita.") }
+            )
+        }
 
-        OutlinedTextField(
-            value = viewModel.parsedAddress,
-            onValueChange = { viewModel.parsedAddress = it },
-            label = { Text("Endereço:") },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
-            leadingIcon = { Icon(Icons.Default.Place, contentDescription = null) }
-        )
+        // Endereço
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Endereço:",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            OutlinedTextField(
+                value = viewModel.parsedAddress,
+                onValueChange = { viewModel.parsedAddress = it },
+                placeholder = { Text("Endereço físico", color = com.example.ui.theme.Slate400) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = zapDeckTextFieldColors(),
+                leadingIcon = { Icon(Icons.Default.Place, contentDescription = null, tint = com.example.ui.theme.Slate700) }
+            )
+        }
 
-        OutlinedTextField(
-            value = viewModel.parsedObservations,
-            onValueChange = { viewModel.parsedObservations = it },
-            label = { Text("Observações (Serviços e Soluções):") },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
-            leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) },
-            supportingText = { Text("Compilado dinâmico das listagens ou especialidades do cartão.") }
-        )
+        // Serviços / Observações
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Observações (Serviços e Soluções):",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+            OutlinedTextField(
+                value = viewModel.parsedObservations,
+                onValueChange = { viewModel.parsedObservations = it },
+                placeholder = { Text("Serviços ou soluções listadas no cartão", color = com.example.ui.theme.Slate400) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = zapDeckTextFieldColors(),
+                leadingIcon = { Icon(Icons.Default.Info, contentDescription = null, tint = com.example.ui.theme.Slate700) },
+                supportingText = { Text("Compilado dinâmico das listagens ou especialidades do cartão.") }
+            )
+        }
 
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f)),
             shape = RoundedCornerShape(12.dp)
         ) {
             Column(
@@ -711,7 +902,7 @@ fun ScanReviewLayout(
                     text = "Opções de Envio do WhatsApp",
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = com.example.ui.theme.Slate900
                 )
 
                 if (existingWhatsAppContact != null) {
@@ -772,11 +963,12 @@ fun ScanReviewLayout(
                         Column {
                             Text(
                                 text = "Enviar via WhatsApp Padrão",
-                                fontSize = 13.sp,
-                                color = if (whatsAppNormalExists && existingWhatsAppContact == null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                fontSize = 13.5.sp,
+                                fontWeight = if (whatsAppNormalExists && existingWhatsAppContact == null) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (whatsAppNormalExists && existingWhatsAppContact == null) com.example.ui.theme.Slate900 else com.example.ui.theme.Slate400
                             )
                             if (viewModel.parsedPrimaryPhone.isNotBlank() && whatsAppChecked && !whatsAppNormalExists) {
-                                Text("Apenas disponível para formato de celular celular garantido", fontSize = 10.sp, color = MaterialTheme.colorScheme.error)
+                                Text("Apenas disponível para formato de celular garantido", fontSize = 10.sp, color = MaterialTheme.colorScheme.error)
                             }
                         }
                     }
@@ -795,8 +987,9 @@ fun ScanReviewLayout(
                         Column {
                             Text(
                                 text = "Enviar via WhatsApp Business",
-                                fontSize = 13.sp,
-                                color = if (whatsAppBusinessExists && existingWhatsAppContact == null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                fontSize = 13.5.sp,
+                                fontWeight = if (whatsAppBusinessExists && existingWhatsAppContact == null) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (whatsAppBusinessExists && existingWhatsAppContact == null) com.example.ui.theme.Slate900 else com.example.ui.theme.Slate400
                             )
                             if (viewModel.parsedPrimaryPhone.isNotBlank() && whatsAppChecked && !whatsAppBusinessExists) {
                                 Text("Apenas disponível para formato de celular garantido", fontSize = 10.sp, color = MaterialTheme.colorScheme.error)
@@ -823,7 +1016,7 @@ fun ScanReviewLayout(
                     text = "Mensagem para Enviar (Habilitado se WhatsApp selecionado):",
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 12.sp,
-                    color = if (isMessageEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    color = if (isMessageEnabled) com.example.ui.theme.Slate900 else com.example.ui.theme.Slate400,
                     modifier = Modifier.padding(start = 4.dp)
                 )
 
@@ -834,7 +1027,10 @@ fun ScanReviewLayout(
                     enabled = isMessageEnabled,
                     maxLines = 8,
                     minLines = 3,
-                    textStyle = MaterialTheme.typography.bodyMedium,
+                    colors = zapDeckTextFieldColors(),
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        color = if (isMessageEnabled) com.example.ui.theme.Slate900 else com.example.ui.theme.Slate400
+                    ),
                     shape = RoundedCornerShape(8.dp),
                     supportingText = { Text("Lembrete: O template utiliza seu nome de usuário (${viewModel.userName}).", fontSize = 10.sp) }
                 )
@@ -844,7 +1040,7 @@ fun ScanReviewLayout(
         // Instagram Checkbox (Optional)
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
+            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.95f)),
             shape = RoundedCornerShape(12.dp)
         ) {
             Column(
@@ -893,7 +1089,7 @@ fun ScanReviewLayout(
                             text = "Abrir o Instagram ao salvar para seguir o contato",
                             fontWeight = FontWeight.Bold,
                             fontSize = 13.sp,
-                            color = if (instagramExists && viewModel.parsedInstagram.isNotBlank() && existingInstagramContact == null) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                            color = if (instagramExists && viewModel.parsedInstagram.isNotBlank() && existingInstagramContact == null) com.example.ui.theme.Slate900 else com.example.ui.theme.Slate400
                         )
                         if (isCheckingInstagram) {
                             Text(
@@ -938,9 +1134,13 @@ fun ScanReviewLayout(
                 modifier = Modifier
                     .weight(1f)
                     .height(48.dp),
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = Color.White
+                ),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f))
             ) {
-                Text("Descartar")
+                Text("Descartar", fontWeight = FontWeight.Bold)
             }
 
             Button(
@@ -1030,15 +1230,20 @@ fun ScanReviewLayout(
                 .fillMaxWidth()
                 .height(48.dp),
             shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary)
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = Color.White.copy(alpha = 0.15f),
+                contentColor = Color.White
+            ),
+            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.4f))
         ) {
             Icon(
                 imageVector = Icons.Default.Sensors,
                 contentDescription = null,
+                tint = Color.White,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Transmitir por Aproximação (NFC / QR)", fontWeight = FontWeight.Bold)
+            Text("Transmitir por Aproximação (NFC / QR)", fontWeight = FontWeight.Bold, color = Color.White)
         }
         Spacer(modifier = Modifier.height(16.dp))
     }
@@ -1094,7 +1299,7 @@ fun DashboardLayout(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Escarneie e digitalize cartões físicos com IA",
+                        text = "Digitalize cartões físicos instantaneamente (Offline ou IA)",
                         fontSize = 13.5.sp,
                         color = Color.White.copy(alpha = 0.75f),
                         textAlign = TextAlign.Center
@@ -1309,19 +1514,11 @@ fun DashboardLayout(
             }
         }
     } else {
-        // List of Cards Screen with soft light-blue ambient gradient
+        // List of Cards Screen with ZapDeck royal blue gradient background
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color(0xFFF0F4FA),
-                            Color(0xFFFFFFFF),
-                            Color(0xFFE8EFF9)
-                        )
-                    )
-                )
+                .background(brush = com.example.ui.theme.ZapDeckBlueGradient)
         ) {
             Column(
                 modifier = Modifier
@@ -1332,9 +1529,21 @@ fun DashboardLayout(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = onSearchQueryChanged,
-                    placeholder = { Text("Buscar contatos por nome, serviço...") },
+                    placeholder = { Text("Buscar contatos por nome, serviço...", color = Color.White.copy(alpha = 0.7f)) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedContainerColor = Color.White.copy(alpha = 0.15f),
+                        unfocusedContainerColor = Color.White.copy(alpha = 0.10f),
+                        focusedBorderColor = Color.White,
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.4f),
+                        focusedLeadingIconColor = Color.White,
+                        unfocusedLeadingIconColor = Color.White.copy(alpha = 0.8f),
+                        focusedTrailingIconColor = Color.White,
+                        unfocusedTrailingIconColor = Color.White.copy(alpha = 0.8f)
+                    ),
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
@@ -1360,13 +1569,13 @@ fun DashboardLayout(
                         Card(
                             modifier = Modifier.size(90.dp),
                             shape = CircleShape,
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f))
+                            colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.15f))
                         ) {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.AccountBox,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    tint = Color.White,
                                     modifier = Modifier.size(44.dp)
                                 )
                             }
@@ -1376,13 +1585,13 @@ fun DashboardLayout(
                             text = if (searchQuery.isNotEmpty()) "Nenhum resultado encontrado" else "Nenhum cartão salvo ainda",
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
-                            color = MaterialTheme.colorScheme.onBackground
+                            color = Color.White
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = if (searchQuery.isNotEmpty()) "Tente buscar com outros termos." else "Use o botão acima para capturar seu primeiro cartão!",
                             fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = Color.White.copy(alpha = 0.85f),
                             textAlign = TextAlign.Center,
                             modifier = Modifier.padding(horizontal = 24.dp)
                         )
@@ -1570,38 +1779,52 @@ fun SettingsDialog(
                     text = "Configurações Globais",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = Color.White
                 )
                 Text(
                     text = "Configure seu nome de usuário. Este nome será inserido automaticamente no template da mensagem enviada aos contatos via WhatsApp.",
                     fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color.White.copy(alpha = 0.85f)
                 )
 
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Nome do Usuário Android") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) }
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Nome do Usuário Android:",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        placeholder = { Text("Seu nome para assinatura", color = com.example.ui.theme.Slate400) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = zapDeckTextFieldColors(),
+                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = com.example.ui.theme.Slate700) }
+                    )
+                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(onClick = onDismiss) {
+                    TextButton(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.textButtonColors(contentColor = Color.White.copy(alpha = 0.8f))
+                    ) {
                         Text("Cancelar")
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
                     Button(
                         onClick = {
                             if (name.isNotBlank()) onSave(name)
                         },
-                        shape = RoundedCornerShape(8.dp)
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.ZapDeckPrimary)
                     ) {
-                        Text("Salvar")
+                        Text("Salvar", color = Color.White, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -2150,66 +2373,126 @@ fun EditContactDialog(
             ) {
                 Text(
                     text = "Editar Contato",
-                    fontSize = 18.sp,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = Color.White
                 )
 
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Nome:") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) }
-                )
+                // Nome
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Nome:",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        placeholder = { Text("Nome do contato", color = com.example.ui.theme.Slate400) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = zapDeckTextFieldColors(),
+                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = com.example.ui.theme.Slate700) }
+                    )
+                }
 
-                OutlinedTextField(
-                    value = primaryPhone,
-                    onValueChange = { primaryPhone = it },
-                    label = { Text("Telefone Principal:") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    leadingIcon = { Icon(painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_whatsapp_custom), contentDescription = null, tint = Color.Unspecified, modifier = Modifier.size(24.dp)) }
-                )
+                // Telefone Principal
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Telefone Principal (WhatsApp):",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    OutlinedTextField(
+                        value = primaryPhone,
+                        onValueChange = { primaryPhone = it },
+                        placeholder = { Text("DDD + Número WhatsApp", color = com.example.ui.theme.Slate400) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = zapDeckTextFieldColors(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        leadingIcon = { Icon(painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_whatsapp_custom), contentDescription = null, tint = Color.Unspecified, modifier = Modifier.size(24.dp)) }
+                    )
+                }
 
-                OutlinedTextField(
-                    value = secondaryPhone,
-                    onValueChange = { secondaryPhone = it },
-                    label = { Text("Telefone Secundário:") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                    leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) }
-                )
+                // Telefone Secundário
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Telefone Secundário (Fixo / Recado):",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    OutlinedTextField(
+                        value = secondaryPhone,
+                        onValueChange = { secondaryPhone = it },
+                        placeholder = { Text("Opcional", color = com.example.ui.theme.Slate400) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = zapDeckTextFieldColors(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = com.example.ui.theme.Slate700) }
+                    )
+                }
 
-                OutlinedTextField(
-                    value = instagram,
-                    onValueChange = { instagram = it },
-                    label = { Text("Instagram:") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFFE1306C)) }
-                )
+                // Instagram
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Instagram:",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    OutlinedTextField(
+                        value = instagram,
+                        onValueChange = { instagram = it },
+                        placeholder = { Text("@perfil ou link", color = com.example.ui.theme.Slate400) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = zapDeckTextFieldColors(),
+                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFFE1306C)) }
+                    )
+                }
 
-                OutlinedTextField(
-                    value = address,
-                    onValueChange = { address = it },
-                    label = { Text("Endereço:") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    leadingIcon = { Icon(Icons.Default.Place, contentDescription = null) }
-                )
+                // Endereço
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Endereço:",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    OutlinedTextField(
+                        value = address,
+                        onValueChange = { address = it },
+                        placeholder = { Text("Endereço físico", color = com.example.ui.theme.Slate400) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = zapDeckTextFieldColors(),
+                        leadingIcon = { Icon(Icons.Default.Place, contentDescription = null, tint = com.example.ui.theme.Slate700) }
+                    )
+                }
 
-                OutlinedTextField(
-                    value = observations,
-                    onValueChange = { observations = it },
-                    label = { Text("Serviços / Observações:") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    leadingIcon = { Icon(Icons.Default.Info, contentDescription = null) }
-                )
+                // Serviços / Observações
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Serviços / Observações:",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    OutlinedTextField(
+                        value = observations,
+                        onValueChange = { observations = it },
+                        placeholder = { Text("Serviços prestados ou observações", color = com.example.ui.theme.Slate400) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = zapDeckTextFieldColors(),
+                        leadingIcon = { Icon(Icons.Default.Info, contentDescription = null, tint = com.example.ui.theme.Slate700) }
+                    )
+                }
 
                 // No WhatsApp Preference checklist in Edit screen as per user request
 
@@ -2220,13 +2503,19 @@ fun EditContactDialog(
                     ) {
                         Checkbox(
                             checked = instagramFollowed,
-                            onCheckedChange = { instagramFollowed = it }
+                            onCheckedChange = { instagramFollowed = it },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = com.example.ui.theme.ZapDeckPrimary,
+                                uncheckedColor = Color.White,
+                                checkmarkColor = Color.White
+                            )
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = "Já sigo este contato no Instagram",
                             fontSize = 13.sp,
-                            color = MaterialTheme.colorScheme.onSurface
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White
                         )
                     }
                 }
@@ -2234,9 +2523,9 @@ fun EditContactDialog(
                 if (primaryPhone.isNotBlank() || instagram.isNotBlank()) {
                     Text(
                         text = "Ações Rápidas de Integração",
-                        fontSize = 12.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = Color.White,
                         modifier = Modifier.padding(top = 4.dp)
                     )
                     Row(
@@ -2317,13 +2606,13 @@ fun EditContactDialog(
                         onClick = onDismiss,
                         modifier = Modifier.size(54.dp),
                         shape = CircleShape,
-                        border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline),
+                        border = androidx.compose.foundation.BorderStroke(1.5.dp, Color.White.copy(alpha = 0.6f)),
                         contentPadding = PaddingValues(0.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Close,
                             contentDescription = "Cancelar",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            tint = Color.White,
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -2348,13 +2637,13 @@ fun EditContactDialog(
                         },
                         modifier = Modifier.size(54.dp),
                         shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                        colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.ZapDeckPrimary),
                         contentPadding = PaddingValues(0.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Check,
                             contentDescription = "Salvar",
-                            tint = MaterialTheme.colorScheme.onPrimary,
+                            tint = Color.White,
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -2362,4 +2651,36 @@ fun EditContactDialog(
             }
         }
     }
+}
+
+/**
+ * Reusable high-contrast OutlinedTextField colors helper.
+ * Solves the issue where fonts appeared washed out/disabled:
+ * - Active text: Slate900 (Rich, ultra sharp black/dark slate)
+ * - Active label: Slate700 (High contrast clear label)
+ * - Focused border: ZapDeckPrimary, Unfocused border: Slate400 (visible and defined)
+ * - Disabled state: Distinctively and intentionally dimmed with lower contrast only when actually disabled.
+ */
+@Composable
+fun zapDeckTextFieldColors(): TextFieldColors {
+    return OutlinedTextFieldDefaults.colors(
+        focusedTextColor = com.example.ui.theme.Slate900,
+        unfocusedTextColor = com.example.ui.theme.Slate900,
+        disabledTextColor = com.example.ui.theme.Slate400,
+        focusedContainerColor = Color.White,
+        unfocusedContainerColor = Color.White,
+        disabledContainerColor = com.example.ui.theme.Slate100,
+        focusedBorderColor = com.example.ui.theme.ZapDeckPrimary,
+        unfocusedBorderColor = Color.White.copy(alpha = 0.85f),
+        disabledBorderColor = com.example.ui.theme.Slate200,
+        focusedLabelColor = Color.White,
+        unfocusedLabelColor = Color.White,
+        disabledLabelColor = Color.White.copy(alpha = 0.5f),
+        focusedLeadingIconColor = com.example.ui.theme.ZapDeckPrimary,
+        unfocusedLeadingIconColor = com.example.ui.theme.Slate700,
+        disabledLeadingIconColor = com.example.ui.theme.Slate400,
+        focusedSupportingTextColor = Color.White.copy(alpha = 0.95f),
+        unfocusedSupportingTextColor = Color.White.copy(alpha = 0.85f),
+        disabledSupportingTextColor = Color.White.copy(alpha = 0.5f)
+    )
 }
