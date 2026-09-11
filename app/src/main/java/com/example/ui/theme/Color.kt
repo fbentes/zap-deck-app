@@ -22,14 +22,19 @@ val ZapDeckBlueGradient = Brush.verticalGradient(
     )
 )
 
-// Text & Surfaces (High contrast for light theme)
-val Slate900 = Color(0xFF0F172A) // Rich, sharp text color
-val Slate700 = Color(0xFF334155) // Secondary text color
+// Text & Surfaces (Modern Executive Slate & Clean Light)
+val Slate900 = Color(0xFF0F172A) // Rich, sharp headline/text color
+val Slate800 = Color(0xFF1E293B) // Card headers and prominent labels
+val Slate700 = Color(0xFF334155) // Secondary text color / labels
 val Slate500 = Color(0xFF64748B) // Subtitle / hint text color
-val Slate400 = Color(0xFF94A3B8) // Disabled / muted text color
-val Slate200 = Color(0xFFE2E8F0) // Subtle border color
-val Slate100 = Color(0xFFF1F5F9) // Input background
-val Slate50 = Color(0xFFF8FAFC)  // Clean card/screen background
+val Slate400 = Color(0xFF94A3B8) // Disabled / muted text color / subtle icons
+val Slate300 = Color(0xFFCBD5E1) // Input border / button outline
+val Slate200 = Color(0xFFE2E8F0) // Refined crisp card border
+val Slate100 = Color(0xFFF1F5F9) // Input / Chip background
+val Slate50 = Color(0xFFF8FAFC)  // Clean, comfortable canvas background
+val SoftCardBg = Color(0xFFFFFFFF) // Pure white card surface
+val ChipAccentBg = Color(0xFFE0F2FE) // Soft sky chip background
+val ChipAccentText = Color(0xFF0369A1) // Deep ocean chip text
 
 // Backwards compatibility tokens
 val Purple80 = Color(0xFFD0BCFF)

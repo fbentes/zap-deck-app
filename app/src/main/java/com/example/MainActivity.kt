@@ -274,7 +274,7 @@ fun MainScreen(viewModel: MainViewModel) {
                             Icon(
                                 imageVector = Icons.Default.ArrowBack,
                                 contentDescription = "Voltar para tela inicial",
-                                tint = Color.White
+                                tint = if (showCardList) Color.White else com.example.ui.theme.Slate900
                             )
                         }
                     }
@@ -295,21 +295,32 @@ fun MainScreen(viewModel: MainViewModel) {
                             text = "ZapDeck",
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.titleMedium,
-                            color = Color.White
+                            color = if (showCardList) Color.White else com.example.ui.theme.Slate900
                         )
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = {
+                            com.example.utils.ApkShareHelper.shareInstalledApk(context)
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "Compartilhar Aplicativo ZapDeck (APK)",
+                            tint = if (showCardList) Color.White.copy(alpha = 0.95f) else com.example.ui.theme.Slate700
+                        )
+                    }
                     IconButton(onClick = { showSettingsDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.Settings,
                             contentDescription = "Configurar meu nome",
-                            tint = Color.White.copy(alpha = 0.9f)
+                            tint = if (showCardList) Color.White.copy(alpha = 0.95f) else com.example.ui.theme.Slate700
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = com.example.ui.theme.BlueDeepNavy
+                    containerColor = if (showCardList) Color(0xFF031B33) else Color.White
                 )
             )
         }
@@ -600,7 +611,7 @@ fun ScanReviewLayout(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(brush = com.example.ui.theme.ZapDeckBlueGradient)
+            .background(com.example.ui.theme.Slate50)
     ) {
         Column(
             modifier = Modifier
@@ -615,9 +626,9 @@ fun ScanReviewLayout(
                 .clickable { onBack() },
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.ArrowBack, contentDescription = "Voltar", tint = Color.White)
+            Icon(Icons.Default.ArrowBack, contentDescription = "Voltar", tint = com.example.ui.theme.Slate800)
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Cancelar e Voltar", color = Color.White, fontWeight = FontWeight.Bold)
+            Text("Cancelar e Voltar", color = com.example.ui.theme.Slate800, fontWeight = FontWeight.Bold)
         }
 
         Card(
@@ -766,7 +777,7 @@ fun ScanReviewLayout(
             text = "Revisar dados estruturados",
             fontSize = 18.sp,
             fontWeight = FontWeight.ExtraBold,
-            color = Color.White,
+            color = com.example.ui.theme.Slate900,
             modifier = Modifier.padding(top = 4.dp)
         )
 
@@ -776,7 +787,7 @@ fun ScanReviewLayout(
                 text = "Nome:",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = com.example.ui.theme.Slate800
             )
             OutlinedTextField(
                 value = viewModel.parsedName,
@@ -795,7 +806,7 @@ fun ScanReviewLayout(
                 text = "Telefone principal (WhatsApp / Mensagens):",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = com.example.ui.theme.Slate800
             )
             OutlinedTextField(
                 value = viewModel.parsedPrimaryPhone,
@@ -816,7 +827,7 @@ fun ScanReviewLayout(
                 text = "Telefone secundário (Fixo / Alternativo):",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = com.example.ui.theme.Slate800
             )
             OutlinedTextField(
                 value = viewModel.parsedSecondaryPhone,
@@ -836,7 +847,7 @@ fun ScanReviewLayout(
                 text = "Instagram (perfil, arroba ou link):",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = com.example.ui.theme.Slate800
             )
             OutlinedTextField(
                 value = viewModel.parsedInstagram,
@@ -856,7 +867,7 @@ fun ScanReviewLayout(
                 text = "Endereço:",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = com.example.ui.theme.Slate800
             )
             OutlinedTextField(
                 value = viewModel.parsedAddress,
@@ -875,7 +886,7 @@ fun ScanReviewLayout(
                 text = "Observações (Serviços e Soluções):",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = com.example.ui.theme.Slate800
             )
             OutlinedTextField(
                 value = viewModel.parsedObservations,
@@ -1136,9 +1147,9 @@ fun ScanReviewLayout(
                     .height(48.dp),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = Color.White
+                    contentColor = com.example.ui.theme.Slate700
                 ),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f))
+                border = BorderStroke(1.dp, com.example.ui.theme.Slate400)
             ) {
                 Text("Descartar", fontWeight = FontWeight.Bold)
             }
@@ -1529,26 +1540,27 @@ fun DashboardLayout(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = onSearchQueryChanged,
-                    placeholder = { Text("Buscar contatos por nome, serviço...", color = Color.White.copy(alpha = 0.7f)) },
+                    placeholder = { Text("Buscar contatos por nome, serviço...", color = com.example.ui.theme.Slate400) },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedContainerColor = Color.White.copy(alpha = 0.15f),
-                        unfocusedContainerColor = Color.White.copy(alpha = 0.10f),
+                        focusedTextColor = com.example.ui.theme.Slate900,
+                        unfocusedTextColor = com.example.ui.theme.Slate900,
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White,
+                        disabledContainerColor = Color.White,
                         focusedBorderColor = Color.White,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.4f),
-                        focusedLeadingIconColor = Color.White,
-                        unfocusedLeadingIconColor = Color.White.copy(alpha = 0.8f),
-                        focusedTrailingIconColor = Color.White,
-                        unfocusedTrailingIconColor = Color.White.copy(alpha = 0.8f)
+                        unfocusedBorderColor = Color.White.copy(alpha = 0.85f),
+                        focusedLeadingIconColor = com.example.ui.theme.ZapDeckPrimary,
+                        unfocusedLeadingIconColor = com.example.ui.theme.Slate700,
+                        focusedTrailingIconColor = com.example.ui.theme.ZapDeckPrimary,
+                        unfocusedTrailingIconColor = com.example.ui.theme.Slate700
                     ),
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = com.example.ui.theme.Slate700) },
                     trailingIcon = {
                         if (searchQuery.isNotEmpty()) {
                             IconButton(onClick = { onSearchQueryChanged("") }) {
-                                Icon(Icons.Default.Close, contentDescription = "Limpar busca")
+                                Icon(Icons.Default.Close, contentDescription = "Limpar busca", tint = com.example.ui.theme.Slate700)
                             }
                         }
                     }
@@ -1589,7 +1601,7 @@ fun DashboardLayout(
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = if (searchQuery.isNotEmpty()) "Tente buscar com outros termos." else "Use o botão acima para capturar seu primeiro cartão!",
+                            text = if (searchQuery.isNotEmpty()) "Tente buscar com outros termos." else "Use o botão na tela inicial para capturar seu primeiro cartão!",
                             fontSize = 13.sp,
                             color = Color.White.copy(alpha = 0.85f),
                             textAlign = TextAlign.Center,
@@ -1621,21 +1633,22 @@ fun ContactCard(
             .fillMaxWidth()
             .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp, pressedElevation = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = com.example.ui.theme.SoftCardBg),
+        border = BorderStroke(1.dp, com.example.ui.theme.Slate200)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Box(
                 modifier = Modifier
                     .size(54.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .background(com.example.ui.theme.Slate100)
             ) {
                 if (contact.imageBase64.isNotEmpty()) {
                     Base64Image(
@@ -1648,7 +1661,7 @@ fun ContactCard(
                         Icon(
                             imageVector = Icons.Default.Person,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = com.example.ui.theme.Slate400
                         )
                     }
                 }
@@ -1661,8 +1674,8 @@ fun ContactCard(
                 Text(
                     text = contact.name,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 15.5.sp,
+                    color = com.example.ui.theme.Slate900,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1670,18 +1683,19 @@ fun ContactCard(
                 if (contact.primaryPhone.isNotEmpty()) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
                         Icon(
                             painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_whatsapp_custom),
                             contentDescription = null,
                             tint = Color.Unspecified,
-                            modifier = Modifier.size(14.dp)
+                            modifier = Modifier.size(15.dp)
                         )
                         Text(
                             text = contact.primaryPhone,
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = com.example.ui.theme.Slate700
                         )
                     }
                 }
@@ -1692,16 +1706,24 @@ fun ContactCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         rawServices.take(4).forEach { service ->
                             val sTrim = service.trim()
                             if (sTrim.isNotEmpty()) {
-                                SuggestionChip(
-                                    onClick = { },
-                                    label = { Text(sTrim, fontSize = 9.sp, fontWeight = FontWeight.Medium) },
-                                    modifier = Modifier.height(20.dp)
-                                )
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = com.example.ui.theme.ChipAccentBg,
+                                    border = BorderStroke(0.5.dp, com.example.ui.theme.ChipAccentText.copy(alpha = 0.2f))
+                                ) {
+                                    Text(
+                                        text = sTrim,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = com.example.ui.theme.ChipAccentText,
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.5.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -1709,10 +1731,10 @@ fun ContactCard(
             }
 
             Icon(
-                imageVector = Icons.Default.ArrowBack,
+                imageVector = Icons.Default.ArrowForward,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
+                tint = com.example.ui.theme.Slate400,
+                modifier = Modifier.size(18.dp)
             )
         }
     }
@@ -1761,6 +1783,7 @@ fun SettingsDialog(
     onDismiss: () -> Unit,
     onSave: (String) -> Unit
 ) {
+    val context = LocalContext.current
     var name by remember { mutableStateOf(currentName) }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -1768,23 +1791,25 @@ fun SettingsDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            border = BorderStroke(1.dp, com.example.ui.theme.Slate200),
+            elevation = CardDefaults.cardElevation(8.dp)
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
                     text = "Configurações Globais",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = com.example.ui.theme.Slate900
                 )
                 Text(
                     text = "Configure seu nome de usuário. Este nome será inserido automaticamente no template da mensagem enviada aos contatos via WhatsApp.",
                     fontSize = 13.sp,
-                    color = Color.White.copy(alpha = 0.85f)
+                    color = com.example.ui.theme.Slate500
                 )
 
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1792,7 +1817,7 @@ fun SettingsDialog(
                         text = "Nome do Usuário Android:",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = com.example.ui.theme.Slate800
                     )
                     OutlinedTextField(
                         value = name,
@@ -1805,6 +1830,68 @@ fun SettingsDialog(
                     )
                 }
 
+                HorizontalDivider(color = com.example.ui.theme.Slate200, thickness = 1.dp)
+
+                // App Distribution Section
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = com.example.ui.theme.Slate100),
+                    border = BorderStroke(1.dp, com.example.ui.theme.Slate200)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Android,
+                                contentDescription = null,
+                                tint = Color(0xFF0284C7),
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = "Distribuir Aplicativo (APK)",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = com.example.ui.theme.Slate900
+                            )
+                        }
+                        Text(
+                            text = "Envie o arquivo de instalação completo (.apk) do ZapDeck para qualquer pessoa via WhatsApp, Quick Share ou Bluetooth.",
+                            fontSize = 12.sp,
+                            color = com.example.ui.theme.Slate700
+                        )
+                        Button(
+                            onClick = {
+                                com.example.utils.ApkShareHelper.shareInstalledApk(context)
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Compartilhar APK do ZapDeck",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
@@ -1812,7 +1899,7 @@ fun SettingsDialog(
                 ) {
                     TextButton(
                         onClick = onDismiss,
-                        colors = ButtonDefaults.textButtonColors(contentColor = Color.White.copy(alpha = 0.8f))
+                        colors = ButtonDefaults.textButtonColors(contentColor = com.example.ui.theme.Slate700)
                     ) {
                         Text("Cancelar")
                     }
@@ -2041,11 +2128,13 @@ fun ContactDetailsDialog(
                 .heightIn(max = 620.dp)
                 .padding(8.dp),
             shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            border = BorderStroke(1.dp, com.example.ui.theme.Slate200),
+            elevation = CardDefaults.cardElevation(8.dp)
         ) {
             Column(
                 modifier = Modifier
-                    .padding(16.dp)
+                    .padding(20.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
@@ -2058,30 +2147,43 @@ fun ContactDetailsDialog(
                         text = "Dados do Contato",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = com.example.ui.theme.Slate900,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = { showTransmitDialog = true }) {
+                        IconButton(onClick = { showTransmitDialog = true }, modifier = Modifier.size(36.dp)) {
                             Icon(
                                 imageVector = Icons.Default.Sensors,
                                 contentDescription = "Transmitir por NFC / QR Code",
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = com.example.ui.theme.ZapDeckPrimary,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
-                        IconButton(onClick = onEdit) {
-                            Icon(Icons.Default.Edit, contentDescription = "Editar", tint = MaterialTheme.colorScheme.primary)
+                        IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                Icons.Default.Edit, 
+                                contentDescription = "Editar", 
+                                tint = com.example.ui.theme.Slate700, 
+                                modifier = Modifier.size(20.dp)
+                            )
                         }
-                        IconButton(onClick = onDelete) {
-                            Icon(Icons.Default.Delete, contentDescription = "Excluir", tint = MaterialTheme.colorScheme.error)
+                        IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                Icons.Default.Delete, 
+                                contentDescription = "Excluir", 
+                                tint = Color(0xFFDC2626), // Vermelho vivo realçado 
+                                modifier = Modifier.size(22.dp)
+                            )
                         }
-                        IconButton(onClick = onDismiss) {
+                        IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Fechar",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                contentDescription = "Sair da tela",
+                                tint = com.example.ui.theme.Slate700,
+                                modifier = Modifier.size(24.dp)
                             )
                         }
                     }
@@ -2090,9 +2192,9 @@ fun ContactDetailsDialog(
                 if (contact.imageBase64.isNotEmpty()) {
                     Text(
                         text = "Foto do Cartão Original (Toque para dar zoom):",
-                        fontSize = 11.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = com.example.ui.theme.Slate800
                     )
                     Card(
                         modifier = Modifier
@@ -2100,7 +2202,8 @@ fun ContactDetailsDialog(
                             .height(130.dp)
                             .clickable { isImageZoomed = true },
                         shape = RoundedCornerShape(8.dp),
-                        elevation = CardDefaults.cardElevation(1.dp)
+                        elevation = CardDefaults.cardElevation(1.dp),
+                        border = BorderStroke(1.dp, com.example.ui.theme.Slate200)
                     ) {
                         Base64Image(base64String = contact.imageBase64, modifier = Modifier.fillMaxSize())
                     }
@@ -2137,13 +2240,13 @@ fun ContactDetailsDialog(
                     DetailTextItem(icon = Icons.Default.Info, label = "Serviços / Observações:", value = contact.observations)
                 }
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = com.example.ui.theme.Slate200)
 
                 Text(
                     text = "Ações Rápidas de Integração",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = com.example.ui.theme.Slate800
                 )
 
                 Row(
@@ -2241,30 +2344,6 @@ fun ContactDetailsDialog(
                         }
                     }
                 }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(54.dp),
-                        shape = CircleShape,
-                        border = androidx.compose.foundation.BorderStroke(1.5.dp, MaterialTheme.colorScheme.outline),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Fechar",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
             }
         }
     }
@@ -2293,7 +2372,7 @@ fun DetailTextItem(
     painter: androidx.compose.ui.graphics.painter.Painter? = null,
     label: String,
     value: String,
-    iconColor: Color = MaterialTheme.colorScheme.primary
+    iconColor: Color = com.example.ui.theme.Slate700
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -2319,9 +2398,19 @@ fun DetailTextItem(
                     .padding(top = 2.dp)
             )
         }
-        Column {
-            Text(text = label, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(text = value, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = label, 
+                fontWeight = FontWeight.Bold, 
+                fontSize = 13.sp, 
+                color = com.example.ui.theme.Slate800
+            )
+            Text(
+                text = value, 
+                fontSize = 14.5.sp, 
+                fontWeight = FontWeight.SemiBold, 
+                color = com.example.ui.theme.Slate900
+            )
         }
     }
 }
@@ -2362,21 +2451,82 @@ fun EditContactDialog(
                 .fillMaxWidth()
                 .padding(8.dp)
                 .heightIn(max = 580.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            border = BorderStroke(1.dp, com.example.ui.theme.Slate200),
+            elevation = CardDefaults.cardElevation(8.dp)
         ) {
             Column(
                 modifier = Modifier
-                    .padding(16.dp)
+                    .padding(20.dp)
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                Text(
-                    text = "Editar Contato",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Editar Contato",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = com.example.ui.theme.Slate900,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Sair da tela",
+                                tint = com.example.ui.theme.Slate700,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                if (name.isNotBlank()) {
+                                    onSave(
+                                        contact.copy(
+                                            name = name,
+                                            primaryPhone = primaryPhone,
+                                            secondaryPhone = secondaryPhone,
+                                            instagram = instagram,
+                                            address = address,
+                                            observations = observations,
+                                            useWhatsAppBusiness = useWhatsAppBusiness,
+                                            instagramFollowed = instagramFollowed
+                                        )
+                                    )
+                                }
+                            },
+                            shape = CircleShape,
+                            contentPadding = PaddingValues(0.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = com.example.ui.theme.ZapDeckPrimary,
+                                contentColor = Color.White,
+                                disabledContainerColor = com.example.ui.theme.ZapDeckPrimary.copy(alpha = 0.4f),
+                                disabledContentColor = Color.White.copy(alpha = 0.6f)
+                            ),
+                            enabled = name.isNotBlank(),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Salvar contato",
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                }
 
                 // Nome
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -2384,7 +2534,7 @@ fun EditContactDialog(
                         text = "Nome:",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = com.example.ui.theme.Slate800
                     )
                     OutlinedTextField(
                         value = name,
@@ -2403,7 +2553,7 @@ fun EditContactDialog(
                         text = "Telefone Principal (WhatsApp):",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = com.example.ui.theme.Slate800
                     )
                     OutlinedTextField(
                         value = primaryPhone,
@@ -2423,7 +2573,7 @@ fun EditContactDialog(
                         text = "Telefone Secundário (Fixo / Recado):",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = com.example.ui.theme.Slate800
                     )
                     OutlinedTextField(
                         value = secondaryPhone,
@@ -2443,7 +2593,7 @@ fun EditContactDialog(
                         text = "Instagram:",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = com.example.ui.theme.Slate800
                     )
                     OutlinedTextField(
                         value = instagram,
@@ -2462,7 +2612,7 @@ fun EditContactDialog(
                         text = "Endereço:",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = com.example.ui.theme.Slate800
                     )
                     OutlinedTextField(
                         value = address,
@@ -2481,7 +2631,7 @@ fun EditContactDialog(
                         text = "Serviços / Observações:",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = com.example.ui.theme.Slate800
                     )
                     OutlinedTextField(
                         value = observations,
@@ -2506,7 +2656,7 @@ fun EditContactDialog(
                             onCheckedChange = { instagramFollowed = it },
                             colors = CheckboxDefaults.colors(
                                 checkedColor = com.example.ui.theme.ZapDeckPrimary,
-                                uncheckedColor = Color.White,
+                                uncheckedColor = com.example.ui.theme.Slate400,
                                 checkmarkColor = Color.White
                             )
                         )
@@ -2515,7 +2665,7 @@ fun EditContactDialog(
                             text = "Já sigo este contato no Instagram",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
-                            color = Color.White
+                            color = com.example.ui.theme.Slate700
                         )
                     }
                 }
@@ -2525,7 +2675,7 @@ fun EditContactDialog(
                         text = "Ações Rápidas de Integração",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = com.example.ui.theme.Slate800,
                         modifier = Modifier.padding(top = 4.dp)
                     )
                     Row(
@@ -2595,59 +2745,6 @@ fun EditContactDialog(
                         }
                     }
                 }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Cancel/Close Button: Only icon, elegant circular shape
-                    OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(54.dp),
-                        shape = CircleShape,
-                        border = androidx.compose.foundation.BorderStroke(1.5.dp, Color.White.copy(alpha = 0.6f)),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Cancelar",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-
-                    // Save button: Only icon, elegant circular shape
-                    Button(
-                        onClick = {
-                            if (name.isNotBlank()) {
-                                onSave(
-                                    contact.copy(
-                                        name = name,
-                                        primaryPhone = primaryPhone,
-                                        secondaryPhone = secondaryPhone,
-                                        instagram = instagram,
-                                        address = address,
-                                        observations = observations,
-                                        useWhatsAppBusiness = useWhatsAppBusiness,
-                                        instagramFollowed = instagramFollowed
-                                    )
-                                )
-                            }
-                        },
-                        modifier = Modifier.size(54.dp),
-                        shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.ZapDeckPrimary),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Salvar",
-                            tint = Color.White,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
             }
         }
     }
@@ -2671,16 +2768,16 @@ fun zapDeckTextFieldColors(): TextFieldColors {
         unfocusedContainerColor = Color.White,
         disabledContainerColor = com.example.ui.theme.Slate100,
         focusedBorderColor = com.example.ui.theme.ZapDeckPrimary,
-        unfocusedBorderColor = Color.White.copy(alpha = 0.85f),
+        unfocusedBorderColor = com.example.ui.theme.Slate400,
         disabledBorderColor = com.example.ui.theme.Slate200,
-        focusedLabelColor = Color.White,
-        unfocusedLabelColor = Color.White,
-        disabledLabelColor = Color.White.copy(alpha = 0.5f),
+        focusedLabelColor = com.example.ui.theme.ZapDeckPrimary,
+        unfocusedLabelColor = com.example.ui.theme.Slate700,
+        disabledLabelColor = com.example.ui.theme.Slate400,
         focusedLeadingIconColor = com.example.ui.theme.ZapDeckPrimary,
         unfocusedLeadingIconColor = com.example.ui.theme.Slate700,
         disabledLeadingIconColor = com.example.ui.theme.Slate400,
-        focusedSupportingTextColor = Color.White.copy(alpha = 0.95f),
-        unfocusedSupportingTextColor = Color.White.copy(alpha = 0.85f),
-        disabledSupportingTextColor = Color.White.copy(alpha = 0.5f)
+        focusedSupportingTextColor = com.example.ui.theme.Slate500,
+        unfocusedSupportingTextColor = com.example.ui.theme.Slate500,
+        disabledSupportingTextColor = com.example.ui.theme.Slate400
     )
 }

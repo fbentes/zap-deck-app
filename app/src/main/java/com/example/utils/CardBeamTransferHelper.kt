@@ -80,9 +80,13 @@ object CardBeamTransferHelper {
         if (contact.instagram.isNotBlank()) {
             sb.appendLine("X-SOCIALPROFILE;TYPE=instagram:https://instagram.com/${contact.instagram.replace("@", "")}")
         }
-        if (contact.observations.isNotBlank()) {
-            sb.appendLine("NOTE:${contact.observations.replace("\n", " ")}")
+        val notes = if (contact.observations.isNotBlank()) {
+            "${contact.observations.replace("\n", " ")} [ZapDeck: Use o app ZapDeck para troca rápida de contatos]"
+        } else {
+            "[ZapDeck: Use o app ZapDeck para troca rápida de contatos]"
         }
+        sb.appendLine("NOTE:$notes")
+        sb.appendLine("URL:https://zapdeck.app/download")
         if (includeImage && contact.imageBase64.isNotBlank()) {
             val cleanBase64 = contact.imageBase64.replace("\r", "").replace("\n", "")
             sb.appendLine("PHOTO;ENCODING=b;TYPE=JPEG:$cleanBase64")

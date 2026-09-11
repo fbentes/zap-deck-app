@@ -77,6 +77,12 @@ fun TransmitCardDialog(
         CardBeamTransferHelper.generateQrBitmap(vcard, 600)
     }
 
+    // Generate App Download QR Code
+    val appDownloadQrBitmap = remember {
+        val downloadPayload = "https://github.com/aistudio/zapdeck/releases/latest"
+        CardBeamTransferHelper.generateQrBitmap(downloadPayload, 600)
+    }
+
     // Infinite pulsing animation for NFC radar wave effect
     val infiniteTransition = rememberInfiniteTransition(label = "nfc_pulse")
     val pulseScale by infiniteTransition.animateFloat(
@@ -207,7 +213,7 @@ fun TransmitCardDialog(
                     }
                 }
 
-                // Mode Selector Tabs (NFC / QR Code)
+                // Mode Selector Tabs (NFC / QR Code / Instalar App)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -232,12 +238,12 @@ fun TransmitCardDialog(
                                 imageVector = Icons.Default.Sensors,
                                 contentDescription = null,
                                 tint = if (currentMode == "nfc") Color.White else Color(0xFF475569),
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(15.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "Aproximação (NFC)",
-                                fontSize = 12.sp,
+                                text = "NFC",
+                                fontSize = 11.sp,
                                 fontWeight = if (currentMode == "nfc") FontWeight.Bold else FontWeight.Medium,
                                 color = if (currentMode == "nfc") Color.White else Color(0xFF475569)
                             )
@@ -260,14 +266,42 @@ fun TransmitCardDialog(
                                 imageVector = Icons.Default.QrCode,
                                 contentDescription = null,
                                 tint = if (currentMode == "qr") Color.White else Color(0xFF475569),
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(15.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "QR Code Dinâmico",
-                                fontSize = 12.sp,
+                                text = "QR Contato",
+                                fontSize = 11.sp,
                                 fontWeight = if (currentMode == "qr") FontWeight.Bold else FontWeight.Medium,
                                 color = if (currentMode == "qr") Color.White else Color(0xFF475569)
+                            )
+                        }
+                    }
+
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { currentMode = "app" },
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (currentMode == "app") Color(0xFF0D3261) else Color.Transparent
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = null,
+                                tint = if (currentMode == "app") Color.White else Color(0xFF475569),
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Instalar App",
+                                fontSize = 11.sp,
+                                fontWeight = if (currentMode == "app") FontWeight.Bold else FontWeight.Medium,
+                                color = if (currentMode == "app") Color.White else Color(0xFF475569)
                             )
                         }
                     }
@@ -362,7 +396,7 @@ fun TransmitCardDialog(
                             )
                         }
                     }
-                } else {
+                } else if (currentMode == "qr") {
                     // QR Code Mode
                     Column(
                         modifier = Modifier.fillMaxWidth(),
@@ -378,35 +412,95 @@ fun TransmitCardDialog(
                                 bitmap = qrBitmap.asImageBitmap(),
                                 contentDescription = "QR Code do Cartão",
                                 modifier = Modifier
-                                    .size(200.dp)
+                                    .size(190.dp)
                                     .padding(8.dp)
                             )
                         }
 
                         Text(
-                            text = "Aponte a câmera de outro celular (Galaxy, iPhone ou outro Android) ou tire uma foto dentro do ZapDeck para salvar o contato na agenda nativa instantaneamente.",
+                            text = "Aponte a câmera de outro celular (Galaxy, iPhone ou Android) para salvar o contato na agenda nativa instantaneamente.",
                             fontSize = 12.sp,
                             color = Color(0xFF475569),
                             textAlign = TextAlign.Center,
                             modifier = Modifier.padding(horizontal = 8.dp)
                         )
 
-                        OutlinedButton(
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    val vcard = CardBeamTransferHelper.contactToVCard(contact, includeImage = true)
+                                    val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                        type = "text/x-vcard"
+                                        putExtra(android.content.Intent.EXTRA_TEXT, vcard)
+                                        putExtra(android.content.Intent.EXTRA_SUBJECT, "Cartão de Visita - ${contact.name}")
+                                    }
+                                    context.startActivity(android.content.Intent.createChooser(shareIntent, "Enviar Cartão via WhatsApp / Mensagem"))
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Enviar vCard", fontSize = 11.sp)
+                            }
+
+                            Button(
+                                onClick = {
+                                    com.example.utils.ApkShareHelper.shareInstalledApk(context)
+                                },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
+                            ) {
+                                Icon(Icons.Default.Android, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Enviar App APK", fontSize = 11.sp, color = Color.White)
+                            }
+                        }
+                    }
+                } else {
+                    // App Install Mode
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(2.dp, Color(0xFF0284C7)),
+                            shadowElevation = 4.dp
+                        ) {
+                            Image(
+                                bitmap = appDownloadQrBitmap.asImageBitmap(),
+                                contentDescription = "QR Code para Instalar ZapDeck",
+                                modifier = Modifier
+                                    .size(190.dp)
+                                    .padding(8.dp)
+                            )
+                        }
+
+                        Text(
+                            text = "A outra pessoa pode apontar a câmera do celular para este QR Code para baixar e instalar o ZapDeck imediatamente.",
+                            fontSize = 12.sp,
+                            color = Color(0xFF475569),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+
+                        Button(
                             onClick = {
-                                val vcard = CardBeamTransferHelper.contactToVCard(contact, includeImage = true)
-                                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                    type = "text/x-vcard"
-                                    putExtra(android.content.Intent.EXTRA_TEXT, vcard)
-                                    putExtra(android.content.Intent.EXTRA_SUBJECT, "Cartão de Visita - ${contact.name}")
-                                }
-                                context.startActivity(android.content.Intent.createChooser(shareIntent, "Enviar Cartão via WhatsApp / Mensagem"))
+                                com.example.utils.ApkShareHelper.shareInstalledApk(context)
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp)
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0284C7))
                         ) {
-                            Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Default.Send, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Compartilhar vCard por WhatsApp / Outros Apps", fontSize = 12.sp)
+                            Text("Enviar Arquivo APK (WhatsApp / Quick Share)", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
