@@ -80,7 +80,8 @@ object ContactSystemSync {
         observations: String,
         imageBase64: String,
         useWhatsAppBusiness: Boolean = false,
-        instagramFollowed: Boolean = false
+        instagramFollowed: Boolean = false,
+        landlinePhone: String = ""
     ): Long? {
         val resolver = context.contentResolver
         val ops = ArrayList<ContentProviderOperation>()
@@ -100,7 +101,7 @@ object ContactSystemSync {
             .withValue(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, name)
             .build())
 
-        // 3. Insert Primary Phone
+        // 3. Insert Primary Phone (WhatsApp Principal)
         if (primaryPhone.isNotBlank()) {
             ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
                 .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
@@ -110,13 +111,23 @@ object ContactSystemSync {
                 .build())
         }
 
-        // 4. Insert Secondary Phone
+        // 4. Insert Secondary Phone (WhatsApp Secundário / Celular)
         if (secondaryPhone.isNotBlank()) {
             ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
                 .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
                 .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
                 .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, secondaryPhone)
-                .withValue(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_WORK)
+                .withValue(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_OTHER)
+                .build())
+        }
+
+        // 4.1 Insert Landline / Common Phone (Telefone Fixo / Comum)
+        if (landlinePhone.isNotBlank()) {
+            ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
+                .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
+                .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, landlinePhone)
+                .withValue(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_HOME)
                 .build())
         }
 
@@ -147,6 +158,9 @@ object ContactSystemSync {
         // 7. Store Extra metadata and the #CardZap signature mark in the Note field
         val noteContent = buildString {
             append("$MARKER_TAG\n")
+            if (landlinePhone.isNotBlank()) {
+                append("LandlinePhone: $landlinePhone\n")
+            }
             if (instagram.isNotBlank()) {
                 append("Instagram: $instagram\n")
             }
@@ -213,6 +227,7 @@ object ContactSystemSync {
             var name = ""
             var primaryPhone = ""
             var secondaryPhone = ""
+            var landlinePhone = ""
             var address = ""
             var imageBase64 = ""
             var instagram = ""
@@ -247,14 +262,22 @@ object ContactSystemSync {
                         val phoneNum = c.getString(data1Col)
                         if (!phoneNum.isNullOrBlank()) {
                             val type = c.getInt(data2Col)
-                            if (type == ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE || tc.primaryPhone.isEmpty()) {
+                            if (type == ContactsContract.CommonDataKinds.Phone.TYPE_HOME) {
+                                tc.landlinePhone = phoneNum
+                            } else if (type == ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE || tc.primaryPhone.isEmpty()) {
                                 if (tc.primaryPhone.isEmpty()) {
                                     tc.primaryPhone = phoneNum
-                                } else {
+                                } else if (tc.secondaryPhone.isEmpty()) {
                                     tc.secondaryPhone = phoneNum
+                                } else if (tc.landlinePhone.isEmpty()) {
+                                    tc.landlinePhone = phoneNum
                                 }
                             } else {
-                                tc.secondaryPhone = phoneNum
+                                if (tc.secondaryPhone.isEmpty()) {
+                                    tc.secondaryPhone = phoneNum
+                                } else if (tc.landlinePhone.isEmpty()) {
+                                    tc.landlinePhone = phoneNum
+                                }
                             }
                         }
                     }
@@ -286,7 +309,7 @@ object ContactSystemSync {
                 continue
             }
 
-            if (tc.name.isBlank() && tc.primaryPhone.isBlank() && tc.secondaryPhone.isBlank()) {
+            if (tc.name.isBlank() && tc.primaryPhone.isBlank() && tc.secondaryPhone.isBlank() && tc.landlinePhone.isBlank()) {
                 continue
             }
 
@@ -294,6 +317,7 @@ object ContactSystemSync {
             var finalUseWhatsAppBusiness = false
             var finalObservations = ""
             var finalInstagramFollowed = false
+            var finalLandline = tc.landlinePhone
 
             if (isAppContactMarker(tc.rawNote)) {
                 val rawLines = tc.rawNote.lines()
@@ -302,7 +326,9 @@ object ContactSystemSync {
                 for (line in rawLines) {
                     val trimLine = line.trim()
                     if (trimLine == MARKER_TAG || trimLine == LEGACY_MARKER_TAG) continue
-                    if (trimLine.startsWith("Instagram:")) {
+                    if (trimLine.startsWith("LandlinePhone:")) {
+                        finalLandline = trimLine.substringAfter("LandlinePhone:").trim()
+                    } else if (trimLine.startsWith("Instagram:")) {
                         finalInstagram = trimLine.substringAfter("Instagram:").trim()
                     } else if (trimLine.startsWith("PreferWhatsAppBusiness:")) {
                         finalUseWhatsAppBusiness = trimLine.substringAfter("PreferWhatsAppBusiness:").trim().toBoolean()
@@ -325,6 +351,7 @@ object ContactSystemSync {
                     name = tc.name.ifBlank { "Sem Nome" },
                     primaryPhone = tc.primaryPhone,
                     secondaryPhone = tc.secondaryPhone,
+                    landlinePhone = finalLandline,
                     address = tc.address,
                     observations = finalObservations,
                     imageBase64 = tc.imageBase64,
@@ -351,7 +378,8 @@ object ContactSystemSync {
         observations: String,
         imageBase64: String,
         useWhatsAppBusiness: Boolean = false,
-        instagramFollowed: Boolean = false
+        instagramFollowed: Boolean = false,
+        landlinePhone: String = ""
     ): Boolean {
         if (!hasContactsPermissions(context)) return false
         val resolver = context.contentResolver
@@ -385,7 +413,17 @@ object ContactSystemSync {
                 .withValue(ContactsContract.Data.RAW_CONTACT_ID, rawContactId)
                 .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
                 .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, secondaryPhone)
-                .withValue(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_WORK)
+                .withValue(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_OTHER)
+                .build())
+        }
+
+        // 4.1 Insert Landline Phone
+        if (landlinePhone.isNotBlank()) {
+            ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                .withValue(ContactsContract.Data.RAW_CONTACT_ID, rawContactId)
+                .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
+                .withValue(ContactsContract.CommonDataKinds.Phone.NUMBER, landlinePhone)
+                .withValue(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_HOME)
                 .build())
         }
 
@@ -416,6 +454,9 @@ object ContactSystemSync {
         // 7. Store Extra metadata and the #CardZap signature mark in the Note field
         val noteContent = buildString {
             append("$MARKER_TAG\n")
+            if (landlinePhone.isNotBlank()) {
+                append("LandlinePhone: $landlinePhone\n")
+            }
             if (instagram.isNotBlank()) {
                 append("Instagram: $instagram\n")
             }

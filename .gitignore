@@ -17,3 +17,4 @@ local.properties
 .env
 gemini_api_key.env
 debug.keystore
+.build-outputs/

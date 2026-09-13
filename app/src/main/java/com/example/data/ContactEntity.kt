@@ -9,6 +9,7 @@ data class ContactEntity(
     val name: String,
     val primaryPhone: String,
     val secondaryPhone: String,
+    val landlinePhone: String = "",
     val address: String,
     val observations: String,
     val imageBase64: String, // Storing base64 JPEG of the business card image

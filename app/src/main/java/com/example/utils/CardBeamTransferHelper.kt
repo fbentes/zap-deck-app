@@ -24,6 +24,7 @@ object CardBeamTransferHelper {
         json.put("name", contact.name)
         json.put("primaryPhone", contact.primaryPhone)
         json.put("secondaryPhone", contact.secondaryPhone)
+        json.put("landlinePhone", contact.landlinePhone)
         json.put("address", contact.address)
         json.put("instagram", contact.instagram)
         json.put("observations", contact.observations)
@@ -46,6 +47,7 @@ object CardBeamTransferHelper {
                 name = json.optString("name", ""),
                 primaryPhone = json.optString("primaryPhone", ""),
                 secondaryPhone = json.optString("secondaryPhone", ""),
+                landlinePhone = json.optString("landlinePhone", ""),
                 address = json.optString("address", ""),
                 instagram = json.optString("instagram", ""),
                 observations = json.optString("observations", ""),
@@ -73,6 +75,9 @@ object CardBeamTransferHelper {
         }
         if (contact.secondaryPhone.isNotBlank()) {
             sb.appendLine("TEL;TYPE=WORK,VOICE:${contact.secondaryPhone}")
+        }
+        if (contact.landlinePhone.isNotBlank()) {
+            sb.appendLine("TEL;TYPE=HOME,VOICE:${contact.landlinePhone}")
         }
         if (contact.address.isNotBlank()) {
             sb.appendLine("ADR;TYPE=WORK:;;${contact.address.replace(";", " ")};;;;")

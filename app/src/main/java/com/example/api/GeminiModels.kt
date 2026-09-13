@@ -46,8 +46,9 @@ data class Candidate(
 data class ParsedContact(
     @Json(name = "name") val name: String,
     @Json(name = "primaryPhone") val primaryPhone: String,
-    @Json(name = "secondaryPhone") val secondaryPhone: String?,
-    @Json(name = "address") val address: String?,
-    @Json(name = "observations") val observations: String?,
+    @Json(name = "secondaryPhone") val secondaryPhone: String? = null,
+    @Json(name = "landlinePhone") val landlinePhone: String? = null,
+    @Json(name = "address") val address: String? = null,
+    @Json(name = "observations") val observations: String? = null,
     @Json(name = "instagram") val instagram: String? = null
 )

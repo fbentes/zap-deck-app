@@ -376,27 +376,19 @@ fun MainScreen(viewModel: MainViewModel) {
                     ) {
                         Column(
                             modifier = Modifier
-                                .padding(24.dp)
+                                .padding(horizontal = 28.dp, vertical = 32.dp)
                                 .fillMaxWidth(),
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                            verticalArrangement = Arrangement.spacedBy(20.dp)
                         ) {
-                            CircularProgressIndicator(
-                                color = com.example.ui.theme.ZapDeckPrimary,
-                                strokeWidth = 4.dp,
-                                modifier = Modifier.size(48.dp)
+                            com.example.ui.ProcessingCardAnimation(
+                                modifier = Modifier.size(110.dp)
                             )
                             Text(
-                                text = "Processando foto capturada...",
+                                text = "Processando foto do cartão, aguarde...",
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp,
                                 color = com.example.ui.theme.Slate900,
-                                textAlign = TextAlign.Center
-                            )
-                            Text(
-                                text = viewModel.processingStatusText.ifBlank { "Otimizando imagem e iniciando reconhecimento dos dados do cartão..." },
-                                fontSize = 13.sp,
-                                color = com.example.ui.theme.Slate500,
                                 textAlign = TextAlign.Center
                             )
                         }
@@ -634,13 +626,83 @@ fun ScanReviewLayout(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(200.dp),
+                .height(210.dp),
             shape = RoundedCornerShape(12.dp),
-            elevation = CardDefaults.cardElevation(4.dp)
+            elevation = CardDefaults.cardElevation(4.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F5F9))
         ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                viewModel.capturedImageBase64?.let { base64 ->
-                    Base64Image(base64String = base64, modifier = Modifier.fillMaxSize())
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(6.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                val imageToDisplay = if (viewModel.showOriginalPhoto && viewModel.originalUncroppedBase64 != null) {
+                    viewModel.originalUncroppedBase64
+                } else {
+                    viewModel.capturedImageBase64
+                }
+                imageToDisplay?.let { base64 ->
+                    Base64Image(
+                        base64String = base64,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(8.dp)),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+            }
+        }
+
+        // Subtitle badge & original toggle
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                color = com.example.ui.theme.ZapDeckPrimary.copy(alpha = 0.12f),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CropFree,
+                        contentDescription = null,
+                        tint = com.example.ui.theme.ZapDeckPrimary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = if (viewModel.showOriginalPhoto) "Exibindo foto original" else "Cartão enquadrado e nítido",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = com.example.ui.theme.ZapDeckPrimary
+                    )
+                }
+            }
+
+            if (viewModel.originalUncroppedBase64 != null) {
+                TextButton(
+                    onClick = { viewModel.toggleShowOriginal() },
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = if (viewModel.showOriginalPhoto) Icons.Default.AutoFixHigh else Icons.Default.Layers,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = com.example.ui.theme.Slate700
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (viewModel.showOriginalPhoto) "Ver Otimizado" else "Ver Original",
+                        fontSize = 12.sp,
+                        color = com.example.ui.theme.Slate700
+                    )
                 }
             }
         }
@@ -821,10 +883,10 @@ fun ScanReviewLayout(
             )
         }
 
-        // Telefone Secundário
+        // Telefone Secundário (WhatsApp Secundário)
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                text = "Telefone secundário (Fixo / Alternativo):",
+                text = "Telefone secundário (WhatsApp secundário):",
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Bold,
                 color = com.example.ui.theme.Slate800
@@ -832,12 +894,33 @@ fun ScanReviewLayout(
             OutlinedTextField(
                 value = viewModel.parsedSecondaryPhone,
                 onValueChange = { viewModel.parsedSecondaryPhone = it },
-                placeholder = { Text("Telefone fixo ou alternativo", color = com.example.ui.theme.Slate400) },
+                placeholder = { Text("Segundo número de WhatsApp", color = com.example.ui.theme.Slate400) },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp),
                 colors = zapDeckTextFieldColors(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = com.example.ui.theme.Slate700) }
+                leadingIcon = { Icon(painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_whatsapp_custom), contentDescription = null, tint = Color.Unspecified, modifier = Modifier.size(24.dp)) }
+            )
+        }
+
+        // Telefone Comum / Fixo
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "Telefone comum / fixo:",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = com.example.ui.theme.Slate800
+            )
+            OutlinedTextField(
+                value = viewModel.parsedLandlinePhone,
+                onValueChange = { viewModel.parsedLandlinePhone = it },
+                placeholder = { Text("Telefone fixo com DDD", color = com.example.ui.theme.Slate400) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = zapDeckTextFieldColors(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = com.example.ui.theme.Slate700) },
+                supportingText = { Text("Identificado pelo ícone comum de telefone ou número de 8 dígitos.") }
             )
         }
 
@@ -2154,7 +2237,7 @@ fun ContactDetailsDialog(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = { showTransmitDialog = true }, modifier = Modifier.size(36.dp)) {
+                        IconButton(onClick = { showTransmitDialog = true }, modifier = Modifier.size(38.dp)) {
                             Icon(
                                 imageVector = Icons.Default.Sensors,
                                 contentDescription = "Transmitir por NFC / QR Code",
@@ -2162,7 +2245,7 @@ fun ContactDetailsDialog(
                                 modifier = Modifier.size(20.dp)
                             )
                         }
-                        IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
+                        IconButton(onClick = onEdit, modifier = Modifier.size(38.dp)) {
                             Icon(
                                 Icons.Default.Edit, 
                                 contentDescription = "Editar", 
@@ -2170,20 +2253,20 @@ fun ContactDetailsDialog(
                                 modifier = Modifier.size(20.dp)
                             )
                         }
-                        IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+                        IconButton(onClick = onDelete, modifier = Modifier.size(38.dp)) {
                             Icon(
                                 Icons.Default.Delete, 
                                 contentDescription = "Excluir", 
-                                tint = Color(0xFFDC2626), // Vermelho vivo realçado 
-                                modifier = Modifier.size(22.dp)
+                                tint = Color(0xFFE53935), // Vermelho vivo realçado 
+                                modifier = Modifier.size(24.dp)
                             )
                         }
-                        IconButton(onClick = onDismiss, modifier = Modifier.size(36.dp)) {
+                        IconButton(onClick = onDismiss, modifier = Modifier.size(38.dp)) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Sair da tela",
-                                tint = com.example.ui.theme.Slate700,
-                                modifier = Modifier.size(24.dp)
+                                contentDescription = "Cancelar e sair da tela",
+                                tint = com.example.ui.theme.Slate800,
+                                modifier = Modifier.size(26.dp)
                             )
                         }
                     }
@@ -2194,7 +2277,7 @@ fun ContactDetailsDialog(
                         text = "Foto do Cartão Original (Toque para dar zoom):",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = com.example.ui.theme.Slate800
+                        color = com.example.ui.theme.Slate900
                     )
                     Card(
                         modifier = Modifier
@@ -2220,7 +2303,19 @@ fun ContactDetailsDialog(
                 }
 
                 if (contact.secondaryPhone.isNotEmpty()) {
-                    DetailTextItem(icon = Icons.Default.Phone, label = "Telefone Secundário:", value = contact.secondaryPhone)
+                    DetailTextItem(
+                        painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_whatsapp_custom),
+                        label = "Telefone Secundário (WhatsApp):",
+                        value = contact.secondaryPhone
+                    )
+                }
+
+                if (contact.landlinePhone.isNotEmpty()) {
+                    DetailTextItem(
+                        icon = Icons.Default.Phone,
+                        label = "Telefone Comum / Fixo:",
+                        value = contact.landlinePhone
+                    )
                 }
 
                 if (contact.address.isNotEmpty()) {
@@ -2403,7 +2498,7 @@ fun DetailTextItem(
                 text = label, 
                 fontWeight = FontWeight.Bold, 
                 fontSize = 13.sp, 
-                color = com.example.ui.theme.Slate800
+                color = com.example.ui.theme.Slate900
             )
             Text(
                 text = value, 
@@ -2425,6 +2520,7 @@ fun EditContactDialog(
     var name by remember { mutableStateOf(contact.name) }
     var primaryPhone by remember { mutableStateOf(contact.primaryPhone) }
     var secondaryPhone by remember { mutableStateOf(contact.secondaryPhone) }
+    var landlinePhone by remember { mutableStateOf(contact.landlinePhone) }
     var instagram by remember { mutableStateOf(contact.instagram) }
     var address by remember { mutableStateOf(contact.address) }
     var observations by remember { mutableStateOf(contact.observations) }
@@ -2478,19 +2574,21 @@ fun EditContactDialog(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // Botão Cancelar no topo com ícone claro indicando sair da tela
                         IconButton(
                             onClick = onDismiss,
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
-                                contentDescription = "Sair da tela",
-                                tint = com.example.ui.theme.Slate700,
-                                modifier = Modifier.size(24.dp)
+                                contentDescription = "Cancelar e sair da tela",
+                                tint = com.example.ui.theme.Slate800,
+                                modifier = Modifier.size(26.dp)
                             )
                         }
 
-                        Button(
+                        // Botão Salvar do lado do cancelar: ícone visível que cabe perfeitamente
+                        FilledIconButton(
                             onClick = {
                                 if (name.isNotBlank()) {
                                     onSave(
@@ -2498,6 +2596,7 @@ fun EditContactDialog(
                                             name = name,
                                             primaryPhone = primaryPhone,
                                             secondaryPhone = secondaryPhone,
+                                            landlinePhone = landlinePhone,
                                             instagram = instagram,
                                             address = address,
                                             observations = observations,
@@ -2508,15 +2607,14 @@ fun EditContactDialog(
                                 }
                             },
                             shape = CircleShape,
-                            contentPadding = PaddingValues(0.dp),
-                            colors = ButtonDefaults.buttonColors(
+                            colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = com.example.ui.theme.ZapDeckPrimary,
                                 contentColor = Color.White,
-                                disabledContainerColor = com.example.ui.theme.ZapDeckPrimary.copy(alpha = 0.4f),
+                                disabledContainerColor = com.example.ui.theme.ZapDeckPrimary.copy(alpha = 0.35f),
                                 disabledContentColor = Color.White.copy(alpha = 0.6f)
                             ),
                             enabled = name.isNotBlank(),
-                            modifier = Modifier.size(36.dp)
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Check,
@@ -2570,7 +2668,7 @@ fun EditContactDialog(
                 // Telefone Secundário
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        text = "Telefone Secundário (Fixo / Recado):",
+                        text = "Telefone Secundário (WhatsApp):",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
                         color = com.example.ui.theme.Slate800
@@ -2578,7 +2676,27 @@ fun EditContactDialog(
                     OutlinedTextField(
                         value = secondaryPhone,
                         onValueChange = { secondaryPhone = it },
-                        placeholder = { Text("Opcional", color = com.example.ui.theme.Slate400) },
+                        placeholder = { Text("Segundo número WhatsApp", color = com.example.ui.theme.Slate400) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = zapDeckTextFieldColors(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        leadingIcon = { Icon(painter = androidx.compose.ui.res.painterResource(id = R.drawable.ic_whatsapp_custom), contentDescription = null, tint = Color.Unspecified, modifier = Modifier.size(24.dp)) }
+                    )
+                }
+
+                // Telefone Comum / Fixo
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Telefone Comum / Fixo:",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = com.example.ui.theme.Slate800
+                    )
+                    OutlinedTextField(
+                        value = landlinePhone,
+                        onValueChange = { landlinePhone = it },
+                        placeholder = { Text("Telefone fixo com DDD", color = com.example.ui.theme.Slate400) },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp),
                         colors = zapDeckTextFieldColors(),
