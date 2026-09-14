@@ -25,6 +25,7 @@ object CardBeamTransferHelper {
         json.put("primaryPhone", contact.primaryPhone)
         json.put("secondaryPhone", contact.secondaryPhone)
         json.put("landlinePhone", contact.landlinePhone)
+        json.put("email", contact.email)
         json.put("address", contact.address)
         json.put("instagram", contact.instagram)
         json.put("observations", contact.observations)
@@ -32,6 +33,9 @@ object CardBeamTransferHelper {
         json.put("instagramFollowed", contact.instagramFollowed)
         if (includeImage && contact.imageBase64.isNotEmpty()) {
             json.put("imageBase64", contact.imageBase64)
+        }
+        if (includeImage && contact.backImageBase64.isNotEmpty()) {
+            json.put("backImageBase64", contact.backImageBase64)
         }
         return json.toString()
     }
@@ -48,10 +52,12 @@ object CardBeamTransferHelper {
                 primaryPhone = json.optString("primaryPhone", ""),
                 secondaryPhone = json.optString("secondaryPhone", ""),
                 landlinePhone = json.optString("landlinePhone", ""),
+                email = json.optString("email", ""),
                 address = json.optString("address", ""),
                 instagram = json.optString("instagram", ""),
                 observations = json.optString("observations", ""),
                 imageBase64 = json.optString("imageBase64", ""),
+                backImageBase64 = json.optString("backImageBase64", ""),
                 useWhatsAppBusiness = json.optBoolean("useWhatsAppBusiness", false),
                 instagramFollowed = json.optBoolean("instagramFollowed", false)
             )
@@ -78,6 +84,9 @@ object CardBeamTransferHelper {
         }
         if (contact.landlinePhone.isNotBlank()) {
             sb.appendLine("TEL;TYPE=HOME,VOICE:${contact.landlinePhone}")
+        }
+        if (contact.email.isNotBlank()) {
+            sb.appendLine("EMAIL;TYPE=WORK,INTERNET:${contact.email}")
         }
         if (contact.address.isNotBlank()) {
             sb.appendLine("ADR;TYPE=WORK:;;${contact.address.replace(";", " ")};;;;")
@@ -107,10 +116,13 @@ object CardBeamTransferHelper {
         var name = ""
         var primaryPhone = ""
         var secondaryPhone = ""
+        var landlinePhone = ""
+        var email = ""
         var address = ""
         var instagram = ""
         var observations = ""
         var imageBase64 = ""
+        var backImageBase64 = ""
 
         val lines = vcardStr.lines()
         var parsingPhoto = false
@@ -139,11 +151,18 @@ object CardBeamTransferHelper {
                 }
                 trimmed.startsWith("TEL", ignoreCase = true) -> {
                     val num = trimmed.substringAfter(":").trim()
-                    if (primaryPhone.isEmpty()) {
+                    if (trimmed.contains("HOME", ignoreCase = true)) {
+                        landlinePhone = num
+                    } else if (primaryPhone.isEmpty()) {
                         primaryPhone = num
                     } else if (secondaryPhone.isEmpty()) {
                         secondaryPhone = num
+                    } else if (landlinePhone.isEmpty()) {
+                        landlinePhone = num
                     }
+                }
+                trimmed.startsWith("EMAIL", ignoreCase = true) -> {
+                    email = trimmed.substringAfter(":").trim()
                 }
                 trimmed.startsWith("ADR", ignoreCase = true) -> {
                     val adrPart = trimmed.substringAfter(":").replace(";", ", ").trim()
@@ -176,10 +195,13 @@ object CardBeamTransferHelper {
             name = name,
             primaryPhone = primaryPhone,
             secondaryPhone = secondaryPhone,
+            landlinePhone = landlinePhone,
+            email = email,
             address = address,
             instagram = instagram,
             observations = observations,
-            imageBase64 = imageBase64
+            imageBase64 = imageBase64,
+            backImageBase64 = backImageBase64
         )
     }
 

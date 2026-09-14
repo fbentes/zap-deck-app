@@ -330,7 +330,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            if (viewModel.capturedImageBase64 != null) {
+            if (viewModel.capturedImageBase64 != null && !viewModel.awaitingBackSideCapture) {
                 ScanReviewLayout(
                     viewModel = viewModel,
                     onBack = { viewModel.clearScannedState() },
@@ -353,12 +353,25 @@ fun MainScreen(viewModel: MainViewModel) {
                     searchQuery = searchQuery,
                     onSearchQueryChanged = { searchQuery = it },
                     onTakePhoto = { triggerCamera() },
+                    onPickGallery = { galleryLauncher.launch("image/*") },
+                    scanBackSide = viewModel.scanBackSideEnabled,
+                    onScanBackSideChanged = { viewModel.scanBackSideEnabled = it },
                     showCardList = showCardList,
                     onShowCardListChanged = { showCardList = it }
                 )
             }
 
-            if (viewModel.isProcessingPhoto && viewModel.capturedImageBase64 == null) {
+            if (viewModel.awaitingBackSideCapture) {
+                BackSideCapturePromptDialog(
+                    frontImageBase64 = viewModel.capturedImageBase64,
+                    onCaptureBackCamera = { triggerCamera() },
+                    onCaptureBackGallery = { galleryLauncher.launch("image/*") },
+                    onSkipBack = { viewModel.skipBackSideAndProcessOnlyFront() },
+                    onCancel = { viewModel.cancelBackSideCapture() }
+                )
+            }
+
+            if (viewModel.isProcessingPhoto) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -623,6 +636,50 @@ fun ScanReviewLayout(
             Text("Cancelar e Voltar", color = com.example.ui.theme.Slate800, fontWeight = FontWeight.Bold)
         }
 
+        if (viewModel.backImageBase64 != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FilterChip(
+                    selected = viewModel.viewingFrontCard,
+                    onClick = { viewModel.viewingFrontCard = true },
+                    label = { Text("Frente do Cartão", fontWeight = if (viewModel.viewingFrontCard) FontWeight.Bold else FontWeight.Normal) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Style,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = com.example.ui.theme.ZapDeckPrimary,
+                        selectedLabelColor = Color.White,
+                        selectedLeadingIconColor = Color.White
+                    )
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                FilterChip(
+                    selected = !viewModel.viewingFrontCard,
+                    onClick = { viewModel.viewingFrontCard = false },
+                    label = { Text("Verso do Cartão", fontWeight = if (!viewModel.viewingFrontCard) FontWeight.Bold else FontWeight.Normal) },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Flip,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = com.example.ui.theme.ZapDeckPrimary,
+                        selectedLabelColor = Color.White,
+                        selectedLeadingIconColor = Color.White
+                    )
+                )
+            }
+        }
+
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -637,10 +694,18 @@ fun ScanReviewLayout(
                     .padding(6.dp),
                 contentAlignment = Alignment.Center
             ) {
-                val imageToDisplay = if (viewModel.showOriginalPhoto && viewModel.originalUncroppedBase64 != null) {
-                    viewModel.originalUncroppedBase64
+                val imageToDisplay = if (viewModel.viewingFrontCard) {
+                    if (viewModel.showOriginalPhoto && viewModel.originalUncroppedBase64 != null) {
+                        viewModel.originalUncroppedBase64
+                    } else {
+                        viewModel.capturedImageBase64
+                    }
                 } else {
-                    viewModel.capturedImageBase64
+                    if (viewModel.showOriginalPhoto && viewModel.backOriginalUncroppedBase64 != null) {
+                        viewModel.backOriginalUncroppedBase64
+                    } else {
+                        viewModel.backImageBase64
+                    }
                 }
                 imageToDisplay?.let { base64 ->
                     Base64Image(
@@ -678,7 +743,7 @@ fun ScanReviewLayout(
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = if (viewModel.showOriginalPhoto) "Exibindo foto original" else "Cartão enquadrado e nítido",
+                        text = if (viewModel.showOriginalPhoto) "Exibindo foto original (com fundo)" else "Cartão enquadrado e sem sombras",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = com.example.ui.theme.ZapDeckPrimary
@@ -686,7 +751,12 @@ fun ScanReviewLayout(
                 }
             }
 
-            if (viewModel.originalUncroppedBase64 != null) {
+            val hasOriginal = if (viewModel.viewingFrontCard) {
+                viewModel.originalUncroppedBase64 != null
+            } else {
+                viewModel.backOriginalUncroppedBase64 != null
+            }
+            if (hasOriginal) {
                 TextButton(
                     onClick = { viewModel.toggleShowOriginal() },
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
@@ -699,7 +769,7 @@ fun ScanReviewLayout(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = if (viewModel.showOriginalPhoto) "Ver Otimizado" else "Ver Original",
+                        text = if (viewModel.showOriginalPhoto) "Ver Otimizado (Sem Sombras)" else "Ver Original com Fundo",
                         fontSize = 12.sp,
                         color = com.example.ui.theme.Slate700
                     )
@@ -719,31 +789,17 @@ fun ScanReviewLayout(
                         .padding(20.dp)
                         .fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    CircularProgressIndicator(
-                        color = com.example.ui.theme.ZapDeckPrimary,
-                        strokeWidth = 4.dp,
-                        modifier = Modifier.size(42.dp)
+                    com.example.ui.ProcessingCardAnimation(
+                        modifier = Modifier.size(80.dp)
                     )
                     Text(
-                        text = if (viewModel.processingStatusText.isNotBlank()) {
-                            viewModel.processingStatusText
-                        } else if (viewModel.scanEngine == "offline") {
-                            "Reconhecimento de Texto On-Device (100% Offline via Google ML Kit)... Lendo o cartão sem precisar de internet."
-                        } else {
-                            "A IA do Gemini está analisando o layout do cartão para extrair nome, telefones (detectando WhatsApp), Instagram, endereço e serviços..."
-                        },
+                        text = "Processando foto do cartão, aguarde...",
                         textAlign = TextAlign.Center,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
                         color = com.example.ui.theme.Slate900
-                    )
-                    Text(
-                        text = "Aguarde um instante enquanto estruturamos os dados...",
-                        textAlign = TextAlign.Center,
-                        fontSize = 12.sp,
-                        color = com.example.ui.theme.Slate500
                     )
                 }
             }
@@ -921,6 +977,27 @@ fun ScanReviewLayout(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                 leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = com.example.ui.theme.Slate700) },
                 supportingText = { Text("Identificado pelo ícone comum de telefone ou número de 8 dígitos.") }
+            )
+        }
+
+        // E-mail
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                text = "E-mail:",
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = com.example.ui.theme.Slate800
+            )
+            OutlinedTextField(
+                value = viewModel.parsedEmail,
+                onValueChange = { viewModel.parsedEmail = it },
+                placeholder = { Text("contato@empresa.com.br", color = com.example.ui.theme.Slate400) },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = zapDeckTextFieldColors(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = com.example.ui.theme.Slate700) },
+                supportingText = { Text("Endereço de e-mail identificado no cartão.") }
             )
         }
 
@@ -1351,6 +1428,9 @@ fun DashboardLayout(
     searchQuery: String,
     onSearchQueryChanged: (String) -> Unit,
     onTakePhoto: () -> Unit,
+    onPickGallery: () -> Unit,
+    scanBackSide: Boolean,
+    onScanBackSideChanged: (Boolean) -> Unit,
     showCardList: Boolean,
     onShowCardListChanged: (Boolean) -> Unit
 ) {
@@ -1552,30 +1632,101 @@ fun DashboardLayout(
                     }
                 }
 
-                // Interactive Primary Call to Actions Section (Central Camera Trigger)
+                // Interactive Primary Call to Actions Section (Central Camera Trigger & Verso Toggle)
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
                     modifier = Modifier.padding(bottom = 16.dp)
                 ) {
-                    // Beautiful floating central camera trigger button
-                    Button(
-                        onClick = { onTakePhoto() },
-                        modifier = Modifier
-                            .size(76.dp),
-                        shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color.White,
-                            contentColor = Color(0xFF0D3261)
+                    // Checkbox toggle for Back-Side scanning (Frente e Verso)
+                    Surface(
+                        onClick = { onScanBackSideChanged(!scanBackSide) },
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (scanBackSide) Color(0xFF00E5FF).copy(alpha = 0.22f) else Color.White.copy(alpha = 0.12f),
+                        border = BorderStroke(
+                            1.dp,
+                            if (scanBackSide) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.3f)
                         ),
-                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp),
-                        contentPadding = PaddingValues(0.dp)
+                        modifier = Modifier.fillMaxWidth(0.92f)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.CameraAlt,
-                            contentDescription = "Tirar foto",
-                            modifier = Modifier.size(34.dp)
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = scanBackSide,
+                                onCheckedChange = onScanBackSideChanged,
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = Color(0xFF00E5FF),
+                                    checkmarkColor = Color(0xFF031B33),
+                                    uncheckedColor = Color.White.copy(alpha = 0.7f)
+                                ),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Digitalizar verso também (Frente e Verso)",
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                                Text(
+                                    text = if (scanBackSide) "Captura a frente e em seguida o verso antes de digitalizar" else "Digitaliza somente a frente do cartão",
+                                    fontSize = 11.sp,
+                                    color = Color.White.copy(alpha = 0.75f)
+                                )
+                            }
+                            Icon(
+                                imageVector = if (scanBackSide) Icons.Default.Flip else Icons.Default.CropPortrait,
+                                contentDescription = null,
+                                tint = if (scanBackSide) Color(0xFF00E5FF) else Color.White.copy(alpha = 0.6f),
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+
+                    // Floating camera trigger + gallery option
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(20.dp)
+                    ) {
+                        // Gallery button
+                        IconButton(
+                            onClick = onPickGallery,
+                            modifier = Modifier
+                                .size(50.dp)
+                                .background(Color.White.copy(alpha = 0.18f), CircleShape)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PhotoLibrary,
+                                contentDescription = "Escolher da Galeria",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+
+                        // Beautiful floating central camera trigger button
+                        Button(
+                            onClick = { onTakePhoto() },
+                            modifier = Modifier.size(76.dp),
+                            shape = CircleShape,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.White,
+                                contentColor = Color(0xFF0D3261)
+                            ),
+                            elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CameraAlt,
+                                contentDescription = "Tirar foto",
+                                modifier = Modifier.size(34.dp)
+                            )
+                        }
+
+                        // Transparent balance box
+                        Box(modifier = Modifier.size(50.dp))
                     }
 
                     // List existing local contact registry cards button
@@ -2179,6 +2330,7 @@ fun ContactDetailsDialog(
 
     val isNormalInstalled = remember(context) { isAppInstalled(context, "com.whatsapp") }
     val isBusinessInstalled = remember(context) { isAppInstalled(context, "com.whatsapp.w4b") }
+    var viewingBackInDetails by remember { mutableStateOf(false) }
 
     LaunchedEffect(contact.primaryPhone) {
         if (contact.primaryPhone.isNotEmpty()) {
@@ -2272,13 +2424,38 @@ fun ContactDetailsDialog(
                     }
                 }
 
-                if (contact.imageBase64.isNotEmpty()) {
-                    Text(
-                        text = "Foto do Cartão Original (Toque para dar zoom):",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = com.example.ui.theme.Slate900
-                    )
+                if (contact.imageBase64.isNotEmpty() || contact.backImageBase64.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Foto do Cartão (Toque para dar zoom):",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = com.example.ui.theme.Slate900
+                        )
+                        if (contact.imageBase64.isNotEmpty() && contact.backImageBase64.isNotEmpty()) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                FilterChip(
+                                    selected = !viewingBackInDetails,
+                                    onClick = { viewingBackInDetails = false },
+                                    label = { Text("Frente", fontSize = 11.sp) }
+                                )
+                                FilterChip(
+                                    selected = viewingBackInDetails,
+                                    onClick = { viewingBackInDetails = true },
+                                    label = { Text("Verso", fontSize = 11.sp) }
+                                )
+                            }
+                        }
+                    }
+                    val currentDisplayBase64 = if (viewingBackInDetails && contact.backImageBase64.isNotEmpty()) {
+                        contact.backImageBase64
+                    } else {
+                        contact.imageBase64
+                    }
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -2288,7 +2465,7 @@ fun ContactDetailsDialog(
                         elevation = CardDefaults.cardElevation(1.dp),
                         border = BorderStroke(1.dp, com.example.ui.theme.Slate200)
                     ) {
-                        Base64Image(base64String = contact.imageBase64, modifier = Modifier.fillMaxSize())
+                        Base64Image(base64String = currentDisplayBase64, modifier = Modifier.fillMaxSize())
                     }
                 }
 
@@ -2315,6 +2492,14 @@ fun ContactDetailsDialog(
                         icon = Icons.Default.Phone,
                         label = "Telefone Comum / Fixo:",
                         value = contact.landlinePhone
+                    )
+                }
+
+                if (contact.email.isNotEmpty()) {
+                    DetailTextItem(
+                        icon = Icons.Default.Email,
+                        label = "E-mail:",
+                        value = contact.email
                     )
                 }
 
@@ -2413,6 +2598,32 @@ fun ContactDetailsDialog(
                         }
                     }
 
+                    if (contact.email.isNotEmpty()) {
+                        Button(
+                            onClick = {
+                                try {
+                                    val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
+                                        data = Uri.parse("mailto:${contact.email}")
+                                    }
+                                    context.startActivity(emailIntent)
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Nenhum aplicativo de e-mail encontrado.", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.size(54.dp),
+                            shape = CircleShape,
+                            colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.ZapDeckPrimary),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Email,
+                                contentDescription = "Enviar E-mail",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+
                     if (contact.instagram.isNotEmpty()) {
                         val isInstagramButtonEnabled = !isCheckingInstagramOnLoad && instagramExists
                         Button(
@@ -2444,6 +2655,11 @@ fun ContactDetailsDialog(
     }
 
     if (isImageZoomed) {
+        val currentZoomBase64 = if (viewingBackInDetails && contact.backImageBase64.isNotEmpty()) {
+            contact.backImageBase64
+        } else {
+            contact.imageBase64
+        }
         Dialog(onDismissRequest = { isImageZoomed = false }) {
             Box(
                 modifier = Modifier
@@ -2452,7 +2668,7 @@ fun ContactDetailsDialog(
                     .clickable { isImageZoomed = false }
             ) {
                 Base64Image(
-                    base64String = contact.imageBase64,
+                    base64String = currentZoomBase64,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Fit
                 )
@@ -2521,6 +2737,7 @@ fun EditContactDialog(
     var primaryPhone by remember { mutableStateOf(contact.primaryPhone) }
     var secondaryPhone by remember { mutableStateOf(contact.secondaryPhone) }
     var landlinePhone by remember { mutableStateOf(contact.landlinePhone) }
+    var email by remember { mutableStateOf(contact.email) }
     var instagram by remember { mutableStateOf(contact.instagram) }
     var address by remember { mutableStateOf(contact.address) }
     var observations by remember { mutableStateOf(contact.observations) }
@@ -2597,6 +2814,7 @@ fun EditContactDialog(
                                             primaryPhone = primaryPhone,
                                             secondaryPhone = secondaryPhone,
                                             landlinePhone = landlinePhone,
+                                            email = email,
                                             instagram = instagram,
                                             address = address,
                                             observations = observations,
@@ -2702,6 +2920,26 @@ fun EditContactDialog(
                         colors = zapDeckTextFieldColors(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                         leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null, tint = com.example.ui.theme.Slate700) }
+                    )
+                }
+
+                // E-mail
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "E-mail:",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = com.example.ui.theme.Slate800
+                    )
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        placeholder = { Text("contato@empresa.com.br", color = com.example.ui.theme.Slate400) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = zapDeckTextFieldColors(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        leadingIcon = { Icon(Icons.Default.Email, contentDescription = null, tint = com.example.ui.theme.Slate700) }
                     )
                 }
 
@@ -2898,4 +3136,163 @@ fun zapDeckTextFieldColors(): TextFieldColors {
         unfocusedSupportingTextColor = com.example.ui.theme.Slate500,
         disabledSupportingTextColor = com.example.ui.theme.Slate400
     )
+}
+
+@Composable
+fun BackSideCapturePromptDialog(
+    frontImageBase64: String?,
+    onCaptureBackCamera: () -> Unit,
+    onCaptureBackGallery: () -> Unit,
+    onSkipBack: () -> Unit,
+    onCancel: () -> Unit
+) {
+    Dialog(onDismissRequest = onCancel) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            elevation = CardDefaults.cardElevation(10.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(22.dp)
+                    .fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(54.dp)
+                        .background(com.example.ui.theme.ZapDeckPrimary.copy(alpha = 0.12f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Flip,
+                        contentDescription = null,
+                        tint = com.example.ui.theme.ZapDeckPrimary,
+                        modifier = Modifier.size(30.dp)
+                    )
+                }
+
+                Text(
+                    text = "Fotografe agora o Verso",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = com.example.ui.theme.Slate900,
+                    textAlign = TextAlign.Center
+                )
+
+                Text(
+                    text = "A frente foi fotografada! Capture o verso do cartão para extrair e associar todos os dados adicionais.",
+                    fontSize = 13.sp,
+                    color = com.example.ui.theme.Slate700,
+                    textAlign = TextAlign.Center
+                )
+
+                frontImageBase64?.let { base64 ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth(0.75f)
+                            .height(85.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, com.example.ui.theme.Slate200)
+                    ) {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            Base64Image(
+                                base64String = base64,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                            Surface(
+                                color = Color.Black.copy(alpha = 0.65f),
+                                modifier = Modifier
+                                    .align(Alignment.BottomStart)
+                                    .padding(4.dp),
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = "Frente capturada ✓",
+                                    fontSize = 10.sp,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Button(
+                        onClick = onCaptureBackCamera,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.ZapDeckPrimary)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CameraAlt,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Tirar Foto do Verso",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = onCaptureBackGallery,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, com.example.ui.theme.ZapDeckPrimary.copy(alpha = 0.5f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PhotoLibrary,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = com.example.ui.theme.ZapDeckPrimary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Escolher Verso da Galeria",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            color = com.example.ui.theme.ZapDeckPrimary
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(onClick = onSkipBack) {
+                            Text(
+                                text = "Pular e usar só frente",
+                                fontSize = 12.sp,
+                                color = com.example.ui.theme.Slate700
+                            )
+                        }
+                        TextButton(onClick = onCancel) {
+                            Text(
+                                text = "Cancelar",
+                                fontSize = 12.sp,
+                                color = Color(0xFFE53935)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

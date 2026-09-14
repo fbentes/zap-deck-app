@@ -81,7 +81,9 @@ object ContactSystemSync {
         imageBase64: String,
         useWhatsAppBusiness: Boolean = false,
         instagramFollowed: Boolean = false,
-        landlinePhone: String = ""
+        landlinePhone: String = "",
+        email: String = "",
+        backImageBase64: String = ""
     ): Long? {
         val resolver = context.contentResolver
         val ops = ArrayList<ContentProviderOperation>()
@@ -131,6 +133,16 @@ object ContactSystemSync {
                 .build())
         }
 
+        // 4.2 Insert Email
+        if (email.isNotBlank()) {
+            ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                .withValueBackReference(ContactsContract.Data.RAW_CONTACT_ID, 0)
+                .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE)
+                .withValue(ContactsContract.CommonDataKinds.Email.ADDRESS, email)
+                .withValue(ContactsContract.CommonDataKinds.Email.TYPE, ContactsContract.CommonDataKinds.Email.TYPE_WORK)
+                .build())
+        }
+
         // 5. Insert Postal Address
         if (address.isNotBlank()) {
             ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
@@ -161,6 +173,9 @@ object ContactSystemSync {
             if (landlinePhone.isNotBlank()) {
                 append("LandlinePhone: $landlinePhone\n")
             }
+            if (email.isNotBlank()) {
+                append("Email: $email\n")
+            }
             if (instagram.isNotBlank()) {
                 append("Instagram: $instagram\n")
             }
@@ -172,6 +187,9 @@ object ContactSystemSync {
             }
             if (observations.isNotBlank()) {
                 append("Observations: $observations\n")
+            }
+            if (backImageBase64.isNotBlank()) {
+                append("BackImageBase64: $backImageBase64\n")
             }
         }
 
@@ -228,8 +246,10 @@ object ContactSystemSync {
             var primaryPhone = ""
             var secondaryPhone = ""
             var landlinePhone = ""
+            var email = ""
             var address = ""
             var imageBase64 = ""
+            var backImageBase64 = ""
             var instagram = ""
             var observations = ""
             var useWhatsAppBusiness = false
@@ -281,6 +301,12 @@ object ContactSystemSync {
                             }
                         }
                     }
+                    ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE -> {
+                        val em = c.getString(data1Col)
+                        if (!em.isNullOrBlank() && tc.email.isBlank()) {
+                            tc.email = em
+                        }
+                    }
                     ContactsContract.CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE -> {
                         val addr = c.getString(data1Col)
                         if (!addr.isNullOrBlank()) {
@@ -318,6 +344,8 @@ object ContactSystemSync {
             var finalObservations = ""
             var finalInstagramFollowed = false
             var finalLandline = tc.landlinePhone
+            var finalEmail = tc.email
+            var finalBackImage = tc.backImageBase64
 
             if (isAppContactMarker(tc.rawNote)) {
                 val rawLines = tc.rawNote.lines()
@@ -328,6 +356,8 @@ object ContactSystemSync {
                     if (trimLine == MARKER_TAG || trimLine == LEGACY_MARKER_TAG) continue
                     if (trimLine.startsWith("LandlinePhone:")) {
                         finalLandline = trimLine.substringAfter("LandlinePhone:").trim()
+                    } else if (trimLine.startsWith("Email:")) {
+                        finalEmail = trimLine.substringAfter("Email:").trim()
                     } else if (trimLine.startsWith("Instagram:")) {
                         finalInstagram = trimLine.substringAfter("Instagram:").trim()
                     } else if (trimLine.startsWith("PreferWhatsAppBusiness:")) {
@@ -336,6 +366,8 @@ object ContactSystemSync {
                         finalInstagramFollowed = trimLine.substringAfter("InstagramFollowed:").trim().toBoolean()
                     } else if (trimLine.startsWith("Observations:")) {
                         cleanObs.append(trimLine.substringAfter("Observations:").trim()).append("\n")
+                    } else if (trimLine.startsWith("BackImageBase64:")) {
+                        finalBackImage = trimLine.substringAfter("BackImageBase64:").trim()
                     } else if (trimLine.isNotEmpty()) {
                         cleanObs.append(trimLine).append("\n")
                     }
@@ -352,9 +384,11 @@ object ContactSystemSync {
                     primaryPhone = tc.primaryPhone,
                     secondaryPhone = tc.secondaryPhone,
                     landlinePhone = finalLandline,
+                    email = finalEmail,
                     address = tc.address,
                     observations = finalObservations,
                     imageBase64 = tc.imageBase64,
+                    backImageBase64 = finalBackImage,
                     createdAt = System.currentTimeMillis(),
                     instagram = finalInstagram,
                     useWhatsAppBusiness = finalUseWhatsAppBusiness,
@@ -379,7 +413,9 @@ object ContactSystemSync {
         imageBase64: String,
         useWhatsAppBusiness: Boolean = false,
         instagramFollowed: Boolean = false,
-        landlinePhone: String = ""
+        landlinePhone: String = "",
+        email: String = "",
+        backImageBase64: String = ""
     ): Boolean {
         if (!hasContactsPermissions(context)) return false
         val resolver = context.contentResolver
@@ -427,6 +463,16 @@ object ContactSystemSync {
                 .build())
         }
 
+        // 4.2 Insert Email
+        if (email.isNotBlank()) {
+            ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
+                .withValue(ContactsContract.Data.RAW_CONTACT_ID, rawContactId)
+                .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE)
+                .withValue(ContactsContract.CommonDataKinds.Email.ADDRESS, email)
+                .withValue(ContactsContract.CommonDataKinds.Email.TYPE, ContactsContract.CommonDataKinds.Email.TYPE_WORK)
+                .build())
+        }
+
         // 5. Insert Postal Address
         if (address.isNotBlank()) {
             ops.add(ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
@@ -457,6 +503,9 @@ object ContactSystemSync {
             if (landlinePhone.isNotBlank()) {
                 append("LandlinePhone: $landlinePhone\n")
             }
+            if (email.isNotBlank()) {
+                append("Email: $email\n")
+            }
             if (instagram.isNotBlank()) {
                 append("Instagram: $instagram\n")
             }
@@ -468,6 +517,9 @@ object ContactSystemSync {
             }
             if (observations.isNotBlank()) {
                 append("Observations: $observations\n")
+            }
+            if (backImageBase64.isNotBlank()) {
+                append("BackImageBase64: $backImageBase64\n")
             }
         }
 

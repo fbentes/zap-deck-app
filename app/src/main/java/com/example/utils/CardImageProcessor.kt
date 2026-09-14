@@ -102,211 +102,275 @@ object CardImageProcessor {
             }
 
             if (maxX > minX && maxY > minY) {
-                // We have a solid text envelope. Now expand outwards to detect the card edges.
-                val contentWidth = maxX - minX
-                val contentHeight = maxY - minY
+                // Ensure text box is bounded within image
+                minX = minX.coerceIn(0, imgWidth - 1)
+                minY = minY.coerceIn(0, imgHeight - 1)
+                maxX = maxX.coerceIn(minX + 1, imgWidth)
+                maxY = maxY.coerceIn(minY + 1, imgHeight)
 
-                // Search outward for card edges
-                val topEdge = findHorizontalEdgeUpward(bitmap, minY, minX, maxX, contentHeight)
-                val bottomEdge = findHorizontalEdgeDownward(bitmap, maxY, minX, maxX, contentHeight)
-                val leftEdge = findVerticalEdgeLeftward(bitmap, minX, minY, maxY, contentWidth)
-                val rightEdge = findVerticalEdgeRightward(bitmap, maxX, minY, maxY, contentWidth)
+                // 1. Determine baseline card surface color (sample between minX and maxX, minY and maxY)
+                val cardSurface = sampleCardSurfaceColor(bitmap, minX, minY, maxX, maxY)
 
-                val paddingX = (contentWidth * 0.05f).roundToInt().coerceAtLeast(12)
-                val paddingY = (contentHeight * 0.05f).roundToInt().coerceAtLeast(12)
+                // 2. Scan outward in each of the 4 directions to find the card-to-table transition:
+                val topEdge = findHorizontalEdge(bitmap, startY = minY, direction = -1, minX = minX, maxX = maxX, cardColor = cardSurface)
+                val bottomEdge = findHorizontalEdge(bitmap, startY = maxY, direction = 1, minX = minX, maxX = maxX, cardColor = cardSurface)
+                val leftEdge = findVerticalEdge(bitmap, startX = minX, direction = -1, minY = minY, maxY = maxY, cardColor = cardSurface)
+                val rightEdge = findVerticalEdge(bitmap, startX = maxX, direction = 1, minY = minY, maxY = maxY, cardColor = cardSurface)
 
-                val finalLeft = leftEdge.coerceAtLeast(0).coerceAtMost(minX - paddingX).coerceAtLeast(0)
-                val finalTop = topEdge.coerceAtLeast(0).coerceAtMost(minY - paddingY).coerceAtLeast(0)
-                val finalRight = rightEdge.coerceAtMost(imgWidth).coerceAtLeast(maxX + paddingX).coerceAtMost(imgWidth)
-                val finalBottom = bottomEdge.coerceAtMost(imgHeight).coerceAtLeast(maxY + paddingY).coerceAtMost(imgHeight)
+                // Small buffer (1-2% of card dimension, ~8-12px) to preserve physical bevel without including desk
+                val bufX = max(6, ((maxX - minX) * 0.02f).roundToInt())
+                val bufY = max(6, ((maxY - minY) * 0.02f).roundToInt())
+
+                val finalLeft = max(0, leftEdge - bufX)
+                val finalTop = max(0, topEdge - bufY)
+                val finalRight = min(imgWidth, rightEdge + bufX)
+                val finalBottom = min(imgHeight, bottomEdge + bufY)
 
                 val rectWidth = finalRight - finalLeft
                 val rectHeight = finalBottom - finalTop
 
+                // Ensure it encompasses at least the text
                 if (rectWidth > 50 && rectHeight > 50) {
-                    return Rect(finalLeft, finalTop, finalRight, finalBottom)
+                    val safeLeft = min(finalLeft, max(0, minX - 8))
+                    val safeTop = min(finalTop, max(0, minY - 8))
+                    val safeRight = max(finalRight, min(imgWidth, maxX + 8))
+                    val safeBottom = max(finalBottom, min(imgHeight, maxY + 8))
+                    return Rect(safeLeft, safeTop, safeRight, safeBottom)
                 }
             }
         }
 
-        // Fallback: Color variance / Sobel boundary scan from image borders
+        // Fallback: Color contrast boundary scan from image borders
         return detectBoundaryByColorContrast(bitmap)
     }
 
     /**
-     * Scans upward from the top text line to detect where the card surface transitions to the desk/background.
+     * Scans horizontally outward (up or down) from text block to detect where the card meets the desk.
      */
-    private fun findHorizontalEdgeUpward(
+    private fun findHorizontalEdge(
         bitmap: Bitmap,
         startY: Int,
+        direction: Int, // -1 for upward, +1 for downward
         minX: Int,
         maxX: Int,
-        contentHeight: Int
+        cardColor: Int
     ): Int {
-        val sampleXStart = minX.coerceAtLeast(0)
-        val sampleXEnd = maxX.coerceAtMost(bitmap.width - 1)
-        if (sampleXStart >= sampleXEnd) return 0
+        val width = bitmap.width
+        val height = bitmap.height
+        val sampleX1 = (minX + (maxX - minX) * 0.10f).toInt().coerceIn(0, width - 1)
+        val sampleX2 = (maxX - (maxX - minX) * 0.10f).toInt().coerceIn(sampleX1 + 1, width)
+        val stepX = max(1, (sampleX2 - sampleX1) / 30)
 
-        val maxSearchDistance = (contentHeight * 0.45f).roundToInt().coerceAtLeast(20)
-        val step = max(1, (sampleXEnd - sampleXStart) / 25)
+        val cardLum = getLuminance(cardColor)
+        val limitY = if (direction < 0) 0 else height - 1
 
-        var prevAvgColor = getAverageRowColor(bitmap, startY, sampleXStart, sampleXEnd, step)
-        var bestEdgeY = 0
-        var maxDifference = 0.0
+        var bestEdgeY = if (direction < 0) 0 else height - 1
+        var foundTransition = false
 
-        val minSearchY = max(0, startY - maxSearchDistance)
-        for (y in (startY - 4) downTo minSearchY) {
-            val curAvgColor = getAverageRowColor(bitmap, y, sampleXStart, sampleXEnd, step)
-            val diff = colorDistance(prevAvgColor, curAvgColor)
-            if (diff > maxDifference && diff > 28.0) {
-                maxDifference = diff
+        var y = startY
+        while (if (direction < 0) y >= limitY else y <= limitY) {
+            val curColor = getAverageRowColor(bitmap, y, sampleX1, sampleX2, stepX)
+            val curLum = getLuminance(curColor)
+            val distFromCard = colorDistance(cardColor, curColor)
+
+            // Look-ahead gradient comparison (4 rows ahead vs 4 rows behind)
+            val yAhead = (y + direction * 4).coerceIn(0, height - 1)
+            val yBehind = (y - direction * 4).coerceIn(0, height - 1)
+            val colorAhead = getAverageRowColor(bitmap, yAhead, sampleX1, sampleX2, stepX)
+            val colorBehind = getAverageRowColor(bitmap, yBehind, sampleX1, sampleX2, stepX)
+            val gradient = colorDistance(colorAhead, colorBehind)
+
+            // Transition from card surface to desk:
+            if ((distFromCard > 38.0 || abs(curLum - cardLum) > 32f) && gradient > 20.0) {
                 bestEdgeY = y
+                foundTransition = true
+                break
+            } else if (distFromCard > 60.0 || abs(curLum - cardLum) > 50f) {
+                bestEdgeY = y
+                foundTransition = true
+                break
             }
-            prevAvgColor = curAvgColor
+
+            y += direction
         }
 
-        return if (maxDifference > 32.0) {
-            // Found a clear transition edge (e.g. blue/white card to brown wooden desk)
-            max(0, bestEdgeY - 2)
+        return if (foundTransition) {
+            bestEdgeY
         } else {
-            // No abrupt edge found, keep standard margin
-            val defaultMargin = (contentHeight * 0.08f).roundToInt()
-            max(0, startY - defaultMargin)
+            if (direction < 0) {
+                max(0, startY - (height * 0.12f).roundToInt())
+            } else {
+                min(height, startY + (height * 0.12f).roundToInt())
+            }
         }
     }
 
     /**
-     * Scans downward from the bottom text line to detect the bottom card edge.
+     * Scans vertically outward (left or right) from text block to detect where the card meets the desk.
      */
-    private fun findHorizontalEdgeDownward(
+    private fun findVerticalEdge(
         bitmap: Bitmap,
-        startY: Int,
+        startX: Int,
+        direction: Int, // -1 for leftward, +1 for rightward
+        minY: Int,
+        maxY: Int,
+        cardColor: Int
+    ): Int {
+        val width = bitmap.width
+        val height = bitmap.height
+        val sampleY1 = (minY + (maxY - minY) * 0.10f).toInt().coerceIn(0, height - 1)
+        val sampleY2 = (maxY - (maxY - minY) * 0.10f).toInt().coerceIn(sampleY1 + 1, height)
+        val stepY = max(1, (sampleY2 - sampleY1) / 30)
+
+        val cardLum = getLuminance(cardColor)
+        val limitX = if (direction < 0) 0 else width - 1
+
+        var bestEdgeX = if (direction < 0) 0 else width - 1
+        var foundTransition = false
+
+        var x = startX
+        while (if (direction < 0) x >= limitX else x <= limitX) {
+            val curColor = getAverageColColor(bitmap, x, sampleY1, sampleY2, stepY)
+            val curLum = getLuminance(curColor)
+            val distFromCard = colorDistance(cardColor, curColor)
+
+            val xAhead = (x + direction * 4).coerceIn(0, width - 1)
+            val xBehind = (x - direction * 4).coerceIn(0, width - 1)
+            val colorAhead = getAverageColColor(bitmap, xAhead, sampleY1, sampleY2, stepY)
+            val colorBehind = getAverageColColor(bitmap, xBehind, sampleY1, sampleY2, stepY)
+            val gradient = colorDistance(colorAhead, colorBehind)
+
+            if ((distFromCard > 38.0 || abs(curLum - cardLum) > 32f) && gradient > 20.0) {
+                bestEdgeX = x
+                foundTransition = true
+                break
+            } else if (distFromCard > 60.0 || abs(curLum - cardLum) > 50f) {
+                bestEdgeX = x
+                foundTransition = true
+                break
+            }
+
+            x += direction
+        }
+
+        return if (foundTransition) {
+            bestEdgeX
+        } else {
+            if (direction < 0) {
+                max(0, startX - (width * 0.10f).roundToInt())
+            } else {
+                min(width, startX + (width * 0.10f).roundToInt())
+            }
+        }
+    }
+
+    private fun sampleCardSurfaceColor(
+        bitmap: Bitmap,
         minX: Int,
+        minY: Int,
         maxX: Int,
-        contentHeight: Int
+        maxY: Int
     ): Int {
-        val sampleXStart = minX.coerceAtLeast(0)
-        val sampleXEnd = maxX.coerceAtMost(bitmap.width - 1)
-        if (sampleXStart >= sampleXEnd) return bitmap.height
+        val width = bitmap.width
+        val height = bitmap.height
+        val sampleX1 = (minX + (maxX - minX) * 0.20f).toInt().coerceIn(0, width - 1)
+        val sampleX2 = (maxX - (maxX - minX) * 0.20f).toInt().coerceIn(sampleX1 + 1, width)
+        val sampleY1 = (minY + (maxY - minY) * 0.20f).toInt().coerceIn(0, height - 1)
+        val sampleY2 = (maxY - (maxY - minY) * 0.20f).toInt().coerceIn(sampleY1 + 1, height)
 
-        val maxSearchDistance = (contentHeight * 0.45f).roundToInt().coerceAtLeast(20)
-        val step = max(1, (sampleXEnd - sampleXStart) / 25)
+        var rSum = 0L
+        var gSum = 0L
+        var bSum = 0L
+        var count = 0
 
-        var prevAvgColor = getAverageRowColor(bitmap, startY, sampleXStart, sampleXEnd, step)
-        var bestEdgeY = bitmap.height
-        var maxDifference = 0.0
+        val stepX = max(1, (sampleX2 - sampleX1) / 15)
+        val stepY = max(1, (sampleY2 - sampleY1) / 15)
 
-        val maxSearchY = min(bitmap.height - 1, startY + maxSearchDistance)
-        for (y in (startY + 4)..maxSearchY) {
-            val curAvgColor = getAverageRowColor(bitmap, y, sampleXStart, sampleXEnd, step)
-            val diff = colorDistance(prevAvgColor, curAvgColor)
-            if (diff > maxDifference && diff > 28.0) {
-                maxDifference = diff
-                bestEdgeY = y
+        for (y in sampleY1 until sampleY2 step stepY) {
+            for (x in sampleX1 until sampleX2 step stepX) {
+                val p = bitmap.getPixel(x, y)
+                val r = (p shr 16) and 0xFF
+                val g = (p shr 8) and 0xFF
+                val b = p and 0xFF
+                val lum = 0.299f * r + 0.587f * g + 0.114f * b
+                if (lum > 130f) {
+                    rSum += r
+                    gSum += g
+                    bSum += b
+                    count++
+                }
             }
-            prevAvgColor = curAvgColor
         }
 
-        return if (maxDifference > 32.0) {
-            min(bitmap.height, bestEdgeY + 2)
+        return if (count > 0) {
+            Color.rgb((rSum / count).toInt(), (gSum / count).toInt(), (bSum / count).toInt())
         } else {
-            val defaultMargin = (contentHeight * 0.08f).roundToInt()
-            min(bitmap.height, startY + defaultMargin)
+            Color.rgb(240, 240, 240)
         }
     }
 
-    /**
-     * Scans leftward from the leftmost text line to detect the left card edge.
-     */
-    private fun findVerticalEdgeLeftward(
-        bitmap: Bitmap,
-        startX: Int,
-        minY: Int,
-        maxY: Int,
-        contentWidth: Int
-    ): Int {
-        val sampleYStart = minY.coerceAtLeast(0)
-        val sampleYEnd = maxY.coerceAtMost(bitmap.height - 1)
-        if (sampleYStart >= sampleYEnd) return 0
-
-        val maxSearchDistance = (contentWidth * 0.45f).roundToInt().coerceAtLeast(20)
-        val step = max(1, (sampleYEnd - sampleYStart) / 25)
-
-        var prevAvgColor = getAverageColColor(bitmap, startX, sampleYStart, sampleYEnd, step)
-        var bestEdgeX = 0
-        var maxDifference = 0.0
-
-        val minSearchX = max(0, startX - maxSearchDistance)
-        for (x in (startX - 4) downTo minSearchX) {
-            val curAvgColor = getAverageColColor(bitmap, x, sampleYStart, sampleYEnd, step)
-            val diff = colorDistance(prevAvgColor, curAvgColor)
-            if (diff > maxDifference && diff > 28.0) {
-                maxDifference = diff
-                bestEdgeX = x
-            }
-            prevAvgColor = curAvgColor
-        }
-
-        return if (maxDifference > 32.0) {
-            max(0, bestEdgeX - 2)
-        } else {
-            val defaultMargin = (contentWidth * 0.06f).roundToInt()
-            max(0, startX - defaultMargin)
-        }
-    }
-
-    /**
-     * Scans rightward from the rightmost text line to detect the right card edge.
-     */
-    private fun findVerticalEdgeRightward(
-        bitmap: Bitmap,
-        startX: Int,
-        minY: Int,
-        maxY: Int,
-        contentWidth: Int
-    ): Int {
-        val sampleYStart = minY.coerceAtLeast(0)
-        val sampleYEnd = maxY.coerceAtMost(bitmap.height - 1)
-        if (sampleYStart >= sampleYEnd) return bitmap.width
-
-        val maxSearchDistance = (contentWidth * 0.45f).roundToInt().coerceAtLeast(20)
-        val step = max(1, (sampleYEnd - sampleYStart) / 25)
-
-        var prevAvgColor = getAverageColColor(bitmap, startX, sampleYStart, sampleYEnd, step)
-        var bestEdgeX = bitmap.width
-        var maxDifference = 0.0
-
-        val maxSearchX = min(bitmap.width - 1, startX + maxSearchDistance)
-        for (x in (startX + 4)..maxSearchX) {
-            val curAvgColor = getAverageColColor(bitmap, x, sampleYStart, sampleYEnd, step)
-            val diff = colorDistance(prevAvgColor, curAvgColor)
-            if (diff > maxDifference && diff > 28.0) {
-                maxDifference = diff
-                bestEdgeX = x
-            }
-            prevAvgColor = curAvgColor
-        }
-
-        return if (maxDifference > 32.0) {
-            min(bitmap.width, bestEdgeX + 2)
-        } else {
-            val defaultMargin = (contentWidth * 0.06f).roundToInt()
-            min(bitmap.width, startX + defaultMargin)
-        }
+    private fun getLuminance(color: Int): Float {
+        val r = (color shr 16) and 0xFF
+        val g = (color shr 8) and 0xFF
+        val b = color and 0xFF
+        return 0.299f * r + 0.587f * g + 0.114f * b
     }
 
     private fun detectBoundaryByColorContrast(bitmap: Bitmap): Rect {
         val width = bitmap.width
         val height = bitmap.height
 
-        // Check if borders contain a strong color shift from the center
-        val centerLuminance = getAreaLuminance(bitmap, width / 4, height / 4, width * 3 / 4, height * 3 / 4)
-        val topLuminance = getAreaLuminance(bitmap, 0, 0, width, height / 8)
+        val centerColor = getAverageRowColor(bitmap, height / 2, width / 4, width * 3 / 4, 10)
+        val centerLum = getLuminance(centerColor)
 
-        val marginX = (width * 0.03f).roundToInt()
-        val marginY = if (abs(centerLuminance - topLuminance) > 30) (height * 0.12f).roundToInt() else (height * 0.03f).roundToInt()
+        // Scan top inward (from 0 down to height/2)
+        var top = 0
+        for (y in 0 until height / 2 step 4) {
+            val rowColor = getAverageRowColor(bitmap, y, width / 4, width * 3 / 4, 10)
+            val rowLum = getLuminance(rowColor)
+            if (colorDistance(rowColor, centerColor) < 35.0 && abs(rowLum - centerLum) < 30f) {
+                top = max(0, y - 4)
+                break
+            }
+        }
 
-        return Rect(marginX, marginY, width - marginX, height - marginY)
+        // Scan bottom inward (from height - 1 down to height/2)
+        var bottom = height
+        for (y in (height - 1) downTo height / 2 step 4) {
+            val rowColor = getAverageRowColor(bitmap, y, width / 4, width * 3 / 4, 10)
+            val rowLum = getLuminance(rowColor)
+            if (colorDistance(rowColor, centerColor) < 35.0 && abs(rowLum - centerLum) < 30f) {
+                bottom = min(height, y + 4)
+                break
+            }
+        }
+
+        // Scan left inward (from 0 to width/2)
+        var left = 0
+        for (x in 0 until width / 2 step 4) {
+            val colColor = getAverageColColor(bitmap, x, height / 4, height * 3 / 4, 10)
+            val colLum = getLuminance(colColor)
+            if (colorDistance(colColor, centerColor) < 35.0 && abs(colLum - centerLum) < 30f) {
+                left = max(0, x - 4)
+                break
+            }
+        }
+
+        // Scan right inward (from width - 1 down to width/2)
+        var right = width
+        for (x in (width - 1) downTo width / 2 step 4) {
+            val colColor = getAverageColColor(bitmap, x, height / 4, height * 3 / 4, 10)
+            val colLum = getLuminance(colColor)
+            if (colorDistance(colColor, centerColor) < 35.0 && abs(colLum - centerLum) < 30f) {
+                right = min(width, x + 4)
+                break
+            }
+        }
+
+        if (right - left > 50 && bottom - top > 50) {
+            return Rect(left, top, right, bottom)
+        }
+        return Rect(0, 0, width, height)
     }
 
     /**

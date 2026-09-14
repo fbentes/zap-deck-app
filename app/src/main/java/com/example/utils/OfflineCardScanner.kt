@@ -26,8 +26,8 @@ object OfflineCardScanner {
         TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
     }
 
-    suspend fun recognizeText(bitmap: Bitmap): Text {
-        val inputImage = InputImage.fromBitmap(bitmap, 0)
+    private suspend fun runOcr(bitmap: Bitmap, rotationDegrees: Int): Text {
+        val inputImage = InputImage.fromBitmap(bitmap, rotationDegrees)
         return suspendCancellableCoroutine { continuation ->
             textRecognizer.process(inputImage)
                 .addOnSuccessListener { text ->
@@ -43,10 +43,188 @@ object OfflineCardScanner {
         }
     }
 
-    suspend fun analyzeCardOffline(bitmap: Bitmap): ParsedContact {
+    data class OcrOrientationResult(
+        val text: Text,
+        val rotationDegrees: Int
+    )
+
+    fun rotateBitmap(bitmap: Bitmap, degrees: Float): Bitmap {
+        if (degrees % 360f == 0f) return bitmap
+        val matrix = android.graphics.Matrix()
+        matrix.postRotate(degrees)
+        return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+    }
+
+    private fun scoreVisionText(text: Text): Int {
+        var score = 0
+        val fullText = text.text
+        if (fullText.isBlank()) return 0
+
+        score += (fullText.length / 4).coerceAtMost(60)
+
+        // Brazilian phone regex matches:
+        val phoneRegex = Regex("""\b(?:\+?55\s*)?(?:\(?\d{2}\)?\s*)?(?:9\d{4}|\d{4})[-.\s]?\d{4}\b""")
+        val phoneMatches = phoneRegex.findAll(fullText).count()
+        score += phoneMatches * 50
+
+        // Email and website regex matches:
+        if (fullText.contains("@") && (fullText.contains(".com") || fullText.contains(".br"))) score += 45
+        if (fullText.contains("www.") || fullText.contains(".com.br")) score += 45
+
+        // Common Portuguese words found on Brazilian business cards
+        val portugueseKeywords = listOf(
+            "bazar", "peças", "pecas", "fogão", "fogao", "panelas", "liquidificadores",
+            "consertos", "utilidades", "cep", "loja", "tels", "esperança", "esperanca",
+            "ostras", "rio das ostras", "silva", "técnico", "tecnico", "felipe", "barbosa",
+            "clínica", "clinica", "saúde", "saude", "avivar", "drogarias", "drogaria", "max",
+            "rua", "av", "avenida", "centro", "bairro", "tel", "fixo", "whats", "whatsapp",
+            "zap", "contato", "atendimento", "dr", "dra", "doutor", "doutora", "serviço", "serviços",
+            "entrega", "odontologia", "médico", "medico", "advogado", "advocacia", "oficina",
+            "comércio", "comercio", "estética", "estetica", "laboratório", "laboratorio"
+        )
+        val lower = fullText.lowercase()
+        for (kw in portugueseKeywords) {
+            if (lower.contains(kw)) score += 35
+        }
+
+        // Letter-dense lines
+        for (block in text.textBlocks) {
+            for (line in block.lines) {
+                val lineText = line.text.trim()
+                if (lineText.length >= 3 && lineText.any { it.isLetter() }) {
+                    score += 10
+                }
+            }
+        }
+
+        return score
+    }
+
+    suspend fun recognizeTextWithOrientation(bitmap: Bitmap): OcrOrientationResult {
+        val rot0 = try { runOcr(bitmap, 0) } catch (e: Exception) { null }
+        val rot90 = try { runOcr(bitmap, 90) } catch (e: Exception) { null }
+        val rot270 = try { runOcr(bitmap, 270) } catch (e: Exception) { null }
+        val rot180 = try { runOcr(bitmap, 180) } catch (e: Exception) { null }
+
+        val candidates = listOfNotNull(
+            rot0?.let { Pair(it, 0) },
+            rot90?.let { Pair(it, 90) },
+            rot270?.let { Pair(it, 270) },
+            rot180?.let { Pair(it, 180) }
+        )
+
+        if (candidates.isEmpty()) {
+            val fallback = runOcr(bitmap, 0)
+            return OcrOrientationResult(fallback, 0)
+        }
+
+        val best = candidates.maxByOrNull { scoreVisionText(it.first) } ?: candidates.first()
+        return OcrOrientationResult(best.first, best.second)
+    }
+
+    suspend fun recognizeText(bitmap: Bitmap): Text {
+        return recognizeTextWithOrientation(bitmap).text
+    }
+
+    suspend fun analyzeCardOffline(frontBitmap: Bitmap, backBitmap: Bitmap? = null): ParsedContact {
         return try {
-            val result = recognizeText(bitmap)
-            extractContactData(result)
+            val frontResult = recognizeText(frontBitmap)
+            val frontContact = extractContactData(frontResult)
+
+            if (backBitmap == null) {
+                return frontContact
+            }
+
+            // Recognize back text
+            val backResult = recognizeText(backBitmap)
+            val backContact = extractContactData(backResult)
+
+            val backLines = backResult.textBlocks
+                .flatMap { b -> b.lines.map { it.text.trim() } }
+                .filter { it.isNotBlank() }
+
+            // Merge:
+            val finalName = if (frontContact.name.isNotBlank() && frontContact.name != "Sem Nome") {
+                frontContact.name
+            } else if (backContact.name.isNotBlank() && backContact.name != "Sem Nome") {
+                backContact.name
+            } else {
+                frontContact.name
+            }
+
+            val finalPrimaryPhone = when {
+                frontContact.primaryPhone.isNotBlank() -> frontContact.primaryPhone
+                backContact.primaryPhone.isNotBlank() -> backContact.primaryPhone
+                else -> ""
+            }
+
+            val finalSecondaryPhone = when {
+                !frontContact.secondaryPhone.isNullOrBlank() -> frontContact.secondaryPhone
+                !backContact.secondaryPhone.isNullOrBlank() && backContact.secondaryPhone != finalPrimaryPhone -> backContact.secondaryPhone
+                backContact.primaryPhone.isNotBlank() && backContact.primaryPhone != finalPrimaryPhone -> backContact.primaryPhone
+                else -> ""
+            }
+
+            val finalLandline = when {
+                !frontContact.landlinePhone.isNullOrBlank() -> frontContact.landlinePhone
+                !backContact.landlinePhone.isNullOrBlank() -> backContact.landlinePhone
+                else -> ""
+            }
+
+            val finalEmail = when {
+                !frontContact.email.isNullOrBlank() -> frontContact.email
+                !backContact.email.isNullOrBlank() -> backContact.email
+                else -> ""
+            }
+
+            val finalAddress = when {
+                !frontContact.address.isNullOrBlank() -> frontContact.address
+                !backContact.address.isNullOrBlank() -> backContact.address
+                else -> ""
+            }
+
+            val finalInstagram = when {
+                !frontContact.instagram.isNullOrBlank() -> frontContact.instagram
+                !backContact.instagram.isNullOrBlank() -> backContact.instagram
+                else -> ""
+            }
+
+            // Observations: front observations + back observations + handwritten / unassigned back text
+            val backNotesList = mutableListOf<String>()
+            if (!backContact.observations.isNullOrBlank()) {
+                backNotesList.add(backContact.observations)
+            }
+
+            for (bLine in backLines) {
+                val bLower = bLine.lowercase().trim()
+                if (!isInstructionPrompt(bLower) && bLine.trim().length >= 3) {
+                    val trimmed = bLine.trim()
+                    if (!backNotesList.any { it.contains(trimmed, ignoreCase = true) || trimmed.contains(it, ignoreCase = true) }) {
+                        backNotesList.add(trimmed)
+                    }
+                }
+            }
+
+            val frontObs = frontContact.observations ?: ""
+            val backObsString = backNotesList.joinToString(" | ")
+
+            val finalObservations = when {
+                frontObs.isNotBlank() && backObsString.isNotBlank() -> "$frontObs | Verso: $backObsString"
+                frontObs.isNotBlank() -> frontObs
+                backObsString.isNotBlank() -> "Verso: $backObsString"
+                else -> ""
+            }
+
+            ParsedContact(
+                name = finalName,
+                primaryPhone = finalPrimaryPhone,
+                secondaryPhone = finalSecondaryPhone,
+                landlinePhone = finalLandline,
+                email = finalEmail,
+                address = finalAddress,
+                observations = finalObservations,
+                instagram = finalInstagram
+            )
         } catch (e: Exception) {
             Log.e(TAG, "Erro no reconhecimento de texto offline: ${e.message}", e)
             throw e
@@ -75,6 +253,9 @@ object OfflineCardScanner {
         // 2. Instagram extraction
         val instagram = extractInstagram(allLines, fullText)
 
+        // 2.1 Email extraction
+        val email = extractEmail(allLines, fullText)
+
         // 3. Address extraction (deducing start via Av., Rua, Logradouro, etc. and assembling full continuation)
         val address = extractAddress(visionText, allLines)
 
@@ -82,17 +263,33 @@ object OfflineCardScanner {
         val name = extractName(visionText, allLines, primaryPhone, secondaryPhone, landlinePhone, instagram, address)
 
         // 5. Observations / Services extraction (e.g. 'Entrega em domicílio', strictly separated from address)
-        val observations = extractObservations(visionText, allLines, name, primaryPhone, secondaryPhone, landlinePhone, instagram, address)
+        val observations = extractObservations(visionText, allLines, name, primaryPhone, secondaryPhone, landlinePhone, email, instagram, address)
 
         return ParsedContact(
             name = name,
             primaryPhone = primaryPhone,
             secondaryPhone = secondaryPhone,
             landlinePhone = landlinePhone,
+            email = email,
             address = address,
             observations = observations,
             instagram = instagram
         )
+    }
+
+    fun extractEmail(allLines: List<String>, fullText: String): String {
+        val emailRegex = Regex("""[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}""")
+        val match = emailRegex.find(fullText)
+        if (match != null) {
+            return match.value.trim()
+        }
+        for (line in allLines) {
+            val lineMatch = emailRegex.find(line)
+            if (lineMatch != null) {
+                return lineMatch.value.trim()
+            }
+        }
+        return ""
     }
 
     data class PhoneExtractionResult(
@@ -111,29 +308,43 @@ object OfflineCardScanner {
      * secondaryWhatsApp = 2nd WhatsApp
      * landlineCommon = landline phone
      */
+    fun extractClassifiedPhonesForTest(lines: List<String>): PhoneExtractionResult {
+        return extractClassifiedPhones(lines)
+    }
+
     private fun extractClassifiedPhones(lines: List<String>): PhoneExtractionResult {
         // Regex matching Brazilian phone formats with or without DDD
         val phoneRegex = Regex("""(?:\+?55\s*)?(?:\(?([1-9]{2})\)?\s*)?(?:(9\d{4})|([2-5]\d{3})|(\d{4}))[\s.-]?(\d{4})""")
-        val whatsAppKeywords = listOf("whatsapp", "whats", "zap", "wpp")
-        val landlineKeywords = listOf("tel", "fixo", "fone", "telefone", "central")
+        val whatsAppKeywords = listOf("whatsapp", "whats", "zap", "wpp", "💬", "📱", "celular", "cel")
+        val landlineKeywords = listOf("tel", "fixo", "fone", "telefone", "central", "comum", "✆", "☎", "📞")
 
-        val whatsAppPhones = mutableListOf<String>()
-        val landlinePhones = mutableListOf<String>()
-        val otherPhones = mutableListOf<String>()
+        data class ScoredPhone(
+            val formatted: String,
+            val isNineDigitMobile: Boolean,
+            val isEightDigitLandline: Boolean,
+            val hasWhatsAppHint: Boolean,
+            val hasLandlineHint: Boolean
+        )
+
+        val detectedPhones = mutableListOf<ScoredPhone>()
 
         for (line in lines) {
-            val lower = line.lowercase()
-            val hasWhatsAppWord = whatsAppKeywords.any { lower.contains(it) }
-            val hasLandlineWord = landlineKeywords.any { lower.contains(it) } && !hasWhatsAppWord
-
             val matches = phoneRegex.findAll(line)
             for (match in matches) {
                 val rawDigits = match.value.replace(Regex("""\D"""), "")
                 if (rawDigits.length in 8..13) {
-                    val formatted = formatBrazilianPhone(rawDigits)
-                    val cleanDigits = rawDigits.let {
-                        if (it.startsWith("55") && it.length >= 12) it.substring(2) else it
+                    val cleanDigits = if (rawDigits.startsWith("55") && rawDigits.length >= 12) {
+                        rawDigits.substring(2)
+                    } else {
+                        rawDigits
                     }
+
+                    val formatted = formatBrazilianPhone(rawDigits)
+
+                    // Inspect context immediately preceding this specific phone occurrence
+                    val prefixText = line.substring(0, match.range.first).takeLast(25).lowercase()
+                    val hasWhatsAppHint = whatsAppKeywords.any { prefixText.contains(it) }
+                    val hasLandlineHint = landlineKeywords.any { prefixText.contains(it) }
 
                     val isNineDigitMobile = when (cleanDigits.length) {
                         11 -> cleanDigits[2] == '9' // (XX) 9XXXX-XXXX
@@ -142,37 +353,53 @@ object OfflineCardScanner {
                     }
 
                     val isEightDigitLandline = when (cleanDigits.length) {
-                        10 -> cleanDigits[2] in '2'..'5' // (XX) 2/3/4/5XXX-XXXX
-                        8 -> cleanDigits[0] in '2'..'5'   // 2/3/4/5XXX-XXXX
+                        10 -> cleanDigits[2] in '2'..'5' // (XX) 2..5XXX-XXXX
+                        8 -> cleanDigits[0] in '2'..'5'   // 2..5XXX-XXXX
                         else -> false
                     }
 
-                    if (hasWhatsAppWord || (isNineDigitMobile && !hasLandlineWord)) {
-                        if (!whatsAppPhones.contains(formatted)) whatsAppPhones.add(formatted)
-                    } else if (hasLandlineWord || isEightDigitLandline) {
-                        if (!landlinePhones.contains(formatted)) landlinePhones.add(formatted)
+                    if (!detectedPhones.any { it.formatted == formatted }) {
+                        detectedPhones.add(
+                            ScoredPhone(
+                                formatted = formatted,
+                                isNineDigitMobile = isNineDigitMobile,
+                                isEightDigitLandline = isEightDigitLandline,
+                                hasWhatsAppHint = hasWhatsAppHint,
+                                hasLandlineHint = hasLandlineHint
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        val whatsAppPhones = mutableListOf<String>()
+        val landlinePhones = mutableListOf<String>()
+
+        for (phone in detectedPhones) {
+            when {
+                // If it explicitly has a landline hint or has landline digit structure without a WhatsApp hint
+                phone.hasLandlineHint || (phone.isEightDigitLandline && !phone.hasWhatsAppHint) -> {
+                    if (!landlinePhones.contains(phone.formatted)) landlinePhones.add(phone.formatted)
+                }
+                // If it has WhatsApp hint or is a 9-digit mobile number
+                phone.hasWhatsAppHint || phone.isNineDigitMobile -> {
+                    if (!whatsAppPhones.contains(phone.formatted)) whatsAppPhones.add(phone.formatted)
+                }
+                else -> {
+                    if (phone.isEightDigitLandline) {
+                        if (!landlinePhones.contains(phone.formatted)) landlinePhones.add(phone.formatted)
                     } else {
-                        if (!otherPhones.contains(formatted)) otherPhones.add(formatted)
+                        if (!whatsAppPhones.contains(phone.formatted)) whatsAppPhones.add(phone.formatted)
                     }
                 }
             }
         }
 
         // Distribute to primary WhatsApp, secondary WhatsApp, and landline
-        val primaryWhatsApp: String
-        val secondaryWhatsApp: String
-        val landlineCommon: String
-
-        if (whatsAppPhones.isNotEmpty()) {
-            primaryWhatsApp = whatsAppPhones[0]
-            secondaryWhatsApp = if (whatsAppPhones.size > 1) whatsAppPhones[1] else otherPhones.firstOrNull() ?: ""
-            landlineCommon = landlinePhones.firstOrNull() ?: if (whatsAppPhones.size > 2) whatsAppPhones[2] else ""
-        } else {
-            // No mobile/WhatsApp detected explicitly
-            primaryWhatsApp = landlinePhones.firstOrNull() ?: otherPhones.firstOrNull() ?: ""
-            secondaryWhatsApp = if (landlinePhones.size > 1) landlinePhones[1] else ""
-            landlineCommon = if (landlinePhones.size > 2) landlinePhones[2] else ""
-        }
+        val primaryWhatsApp = whatsAppPhones.firstOrNull() ?: ""
+        val secondaryWhatsApp = if (whatsAppPhones.size > 1) whatsAppPhones[1] else ""
+        val landlineCommon = landlinePhones.firstOrNull() ?: ""
 
         return PhoneExtractionResult(
             primaryWhatsApp = primaryWhatsApp,
@@ -402,20 +629,34 @@ object OfflineCardScanner {
     ): String {
         val fullTextLower = visionText.text.lowercase()
 
-        // 1. Direct brand deduction for Drogarias MAX (and prominent pharmacy / store brands)
+        // 1. Direct brand deduction for known unique identity patterns
+        // AVIVAR Clínica de Saúde
+        val avivarVariantsRegex = Regex("""(?i)\b(?:avivar|av1var|av-var|aviv\s*ar|aviv\s*a\s*r)\b""")
+        val hasAvivar = avivarVariantsRegex.containsMatchIn(fullTextLower)
+        if (hasAvivar) {
+            val hasClinicaOuSaude = fullTextLower.contains("clínica") || fullTextLower.contains("clinica") ||
+                    fullTextLower.contains("saúde") || fullTextLower.contains("saude")
+            return if (hasClinicaOuSaude) {
+                "AVIVAR Clínica de Saúde"
+            } else {
+                "AVIVAR"
+            }
+        }
+
+        // Drogarias MAX
         val hasDrogarias = fullTextLower.contains("drogarias") || fullTextLower.contains("drogaria")
         val maxVariantsRegex = Regex("""(?i)\b(?:max|mox|mex|mix|mx|wax|nax|mar|m\s*ax|ma\s*x|maxx)\b""")
         val hasMax = maxVariantsRegex.containsMatchIn(fullTextLower)
         val hasSempreAoSeuLado = fullTextLower.contains("sempre ao seu lado") || fullTextLower.contains("ao seu lado")
 
         if (hasDrogarias) {
-            // "Sempre ao seu lado" is the registered trademark slogan of Rede Drogarias Max.
-            // Even if the stylized white 'max' logo was skipped or misread by OCR, Drogarias + slogan is unequivocally Drogarias MAX!
-            if (hasSempreAoSeuLado) {
-                return "Drogarias MAX - Sempre ao seu lado"
-            }
-            if (hasMax) {
-                return "Drogarias MAX"
+            val hasSlogan = hasSempreAoSeuLado ||
+                    fullTextLower.contains("sempre") ||
+                    fullTextLower.contains("lado")
+            return if (hasSlogan) {
+                "Drogarias MAX - Sempre ao seu lado"
+            } else {
+                "Drogarias MAX"
             }
         }
 
@@ -490,23 +731,47 @@ object OfflineCardScanner {
             if (brandCandidate != null) {
                 val assembled = StringBuilder(toTitleCase(brandCandidate.text))
 
-                // Check for horizontal neighbor (disposição horizontal)
-                val horizontalNeighbor = candidateLines.firstOrNull { other ->
+                // Check for brand name / logo line directly ABOVE brandCandidate
+                // (e.g., 'AVIVAR' above 'Clínica de Saúde')
+                val aboveNeighbor = candidateLines.lastOrNull { other ->
                     other != brandCandidate &&
+                            other.bottom <= brandCandidate.top + (brandCandidate.height * 0.4) &&
+                            brandCandidate.top - other.bottom < brandCandidate.height * 3.2 &&
+                            other.text.length >= 2 &&
+                            !isSloganLine(other.lower)
+                }
+
+                if (aboveNeighbor != null) {
+                    val formattedAbove = if (aboveNeighbor.text.all { it.isUpperCase() || !it.isLetter() }) {
+                        aboveNeighbor.text.trim()
+                    } else {
+                        toTitleCase(aboveNeighbor.text)
+                    }
+                    assembled.insert(0, "$formattedAbove ")
+                }
+
+                // Check for horizontal neighbor (disposição horizontal, e.g. 'DROGARIAS' + 'MAX')
+                val horizontalNeighbor = candidateLines.firstOrNull { other ->
+                    other != brandCandidate && other != aboveNeighbor &&
                             Math.abs(other.centerY - brandCandidate.centerY) < brandCandidate.height * 0.8 &&
                             other.left >= brandCandidate.right - (brandCandidate.height * 0.5) &&
                             other.left - brandCandidate.right < brandCandidate.height * 3
                 }
 
                 if (horizontalNeighbor != null) {
-                    assembled.append(" ").append(toTitleCase(horizontalNeighbor.text))
+                    val formattedHoriz = if (horizontalNeighbor.text.all { it.isUpperCase() || !it.isLetter() }) {
+                        horizontalNeighbor.text.trim()
+                    } else {
+                        toTitleCase(horizontalNeighbor.text)
+                    }
+                    assembled.append(" ").append(formattedHoriz)
                 } else {
                     // Check for vertical continuation directly below
                     val verticalNeighbor = candidateLines.firstOrNull { other ->
-                        other != brandCandidate &&
+                        other != brandCandidate && other != aboveNeighbor &&
                                 other.top >= brandCandidate.bottom - (brandCandidate.height * 0.3) &&
-                                other.top - brandCandidate.bottom < brandCandidate.height * 1.6 &&
-                                other.text.split(" ").size <= 2 &&
+                                other.top - brandCandidate.bottom < brandCandidate.height * 1.8 &&
+                                other.text.split(" ").size <= 3 &&
                                 !isSloganLine(other.lower)
                     }
                     if (verticalNeighbor != null) {
@@ -516,14 +781,16 @@ object OfflineCardScanner {
 
                 // If brand candidate is Drogarias / Drogaria, ensure MAX is incorporated
                 val currentAssembled = assembled.toString().trim()
-                if (currentAssembled.equals("Drogarias", ignoreCase = true) || currentAssembled.equals("Drogaria", ignoreCase = true)) {
-                    assembled.clear()
-                    assembled.append("Drogarias MAX")
+                if (currentAssembled.contains("drogarias", ignoreCase = true) || currentAssembled.contains("drogaria", ignoreCase = true)) {
+                    if (!currentAssembled.contains("max", ignoreCase = true)) {
+                        assembled.clear()
+                        assembled.append("Drogarias MAX")
+                    }
                 }
 
                 // Check for slogan line
                 val sloganCandidate = candidateLines.firstOrNull { cand ->
-                    cand != brandCandidate && isSloganLine(cand.lower)
+                    cand != brandCandidate && cand != aboveNeighbor && isSloganLine(cand.lower)
                 } ?: if (hasSempreAoSeuLado) LineBox("Sempre ao seu lado", "sempre ao seu lado", 0, 0, 0, 0, 0, 0) else null
 
                 if (sloganCandidate != null) {
@@ -540,7 +807,7 @@ object OfflineCardScanner {
                 return assembled.toString().trim()
             }
 
-            // If no known prefix, select candidate with highest visual emphasis
+            // If no known prefix, select candidate with highest visual emphasis (size & position)
             val maxFontHeight = candidateLines.maxOfOrNull { it.height } ?: 1
             val minTop = candidateLines.minOfOrNull { it.top } ?: 0
 
@@ -552,13 +819,26 @@ object OfflineCardScanner {
 
             if (bestCandidate != null) {
                 val assembled = StringBuilder(toTitleCase(bestCandidate.text))
-                val neighbor = candidateLines.firstOrNull { other ->
+                
+                // Check for horizontal neighbor
+                val horizNeighbor = candidateLines.firstOrNull { other ->
                     other != bestCandidate &&
                             Math.abs(other.centerY - bestCandidate.centerY) < bestCandidate.height * 0.8 &&
                             other.left >= bestCandidate.right
                 }
-                if (neighbor != null) {
-                    assembled.append(" ").append(toTitleCase(neighbor.text))
+                if (horizNeighbor != null) {
+                    assembled.append(" ").append(toTitleCase(horizNeighbor.text))
+                } else {
+                    // Check for subtitle directly below
+                    val belowNeighbor = candidateLines.firstOrNull { other ->
+                        other != bestCandidate &&
+                                other.top >= bestCandidate.bottom - (bestCandidate.height * 0.3) &&
+                                other.top - bestCandidate.bottom < bestCandidate.height * 2.0 &&
+                                !isSloganLine(other.lower)
+                    }
+                    if (belowNeighbor != null) {
+                        assembled.append(" ").append(toTitleCase(belowNeighbor.text))
+                    }
                 }
                 return assembled.toString().trim()
             }
@@ -663,6 +943,7 @@ object OfflineCardScanner {
         primaryPhone: String,
         secondaryPhone: String,
         landlinePhone: String,
+        email: String,
         instagram: String,
         address: String
     ): String {
@@ -671,37 +952,37 @@ object OfflineCardScanner {
             .filter { it.isNotEmpty() }
 
         val observationLines = mutableListOf<String>()
+        val nameWords = name.lowercase().split(Regex("""\s+""")).filter { it.length > 2 }
 
         for (line in allLines) {
             val trimmed = line.trim()
             val lower = trimmed.lowercase()
 
-            if (trimmed == name || name.contains(trimmed, ignoreCase = true)) continue
+            if (trimmed.length < 2) continue
+            if (trimmed.equals(name, ignoreCase = true) || (nameWords.isNotEmpty() && nameWords.all { lower.contains(it) })) continue
+            if (name.contains(trimmed, ignoreCase = true) && trimmed.length > 4) continue
             if (isPhoneLine(trimmed, cleanPhones) || isRealPhoneNumberLine(trimmed)) continue
             if (address.isNotEmpty() && (address.contains(trimmed, ignoreCase = true) || trimmed.contains(address, ignoreCase = true))) continue
             if (isAddressLine(trimmed) || isAddressContinuationLine(trimmed)) continue
+            if (email.isNotEmpty() && (lower.contains(email.lowercase()) || email.lowercase().contains(lower))) continue
             if (instagram.isNotEmpty() && lower.contains(instagram.lowercase().replace("@", ""))) continue
-            if (lower.startsWith("www.") || lower.contains("@") || lower.contains("http")) continue
             if (isInstructionPrompt(lower)) continue
 
-            // Check if it's a delivery or service offer
-            if (isServiceObservationLine(lower) || lower.contains("delivery") || lower.contains("serviço") || lower.contains("orçamento")) {
-                // Strip OCR bullet artifacts like '6 Entrega em domicílio' -> 'Entrega em domicílio'
-                val cleaned = trimmed
-                    .replace(Regex("""^[\d•*.\-_–—\s]+(?=(?:entrega|delivery|serviço|fazemos|atendimento|orçamento))""", RegexOption.IGNORE_CASE), "")
-                    .trim()
+            // Strip OCR bullet artifacts like '6 Entrega em domicílio' -> 'Entrega em domicílio'
+            val cleaned = trimmed
+                .replace(Regex("""^[\d•*.\-_–—\s]+(?=(?:entrega|delivery|serviço|fazemos|atendimento|orçamento|[a-zA-Z]))""", RegexOption.IGNORE_CASE), "")
+                .trim()
 
-                val formatted = if (cleaned.lowercase().contains("entrega em domic")) {
-                    "Entrega em domicílio"
-                } else if (cleaned.lowercase().contains("entrega a domic")) {
-                    "Entrega a domicílio"
-                } else {
-                    cleaned
-                }
+            val formatted = if (cleaned.lowercase().contains("entrega em domic")) {
+                "Entrega em domicílio"
+            } else if (cleaned.lowercase().contains("entrega a domic")) {
+                "Entrega a domicílio"
+            } else {
+                cleaned
+            }
 
-                if (formatted.isNotEmpty() && !observationLines.contains(formatted)) {
-                    observationLines.add(formatted)
-                }
+            if (formatted.isNotEmpty() && !observationLines.any { it.equals(formatted, ignoreCase = true) }) {
+                observationLines.add(formatted)
             }
         }
 

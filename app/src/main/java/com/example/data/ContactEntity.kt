@@ -10,9 +10,11 @@ data class ContactEntity(
     val primaryPhone: String,
     val secondaryPhone: String,
     val landlinePhone: String = "",
+    val email: String = "",
     val address: String,
     val observations: String,
-    val imageBase64: String, // Storing base64 JPEG of the business card image
+    val imageBase64: String, // Storing base64 JPEG of front business card image
+    val backImageBase64: String = "", // Storing base64 JPEG of back business card image
     val createdAt: Long = System.currentTimeMillis(),
     val instagram: String = "",
     val useWhatsAppBusiness: Boolean = false,

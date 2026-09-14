@@ -86,18 +86,33 @@ class MainViewModel(
         private set
     var isProcessingPhoto by mutableStateOf(false)
         private set
-    var processingStatusText by mutableStateOf("Preparando imagem...")
+    var processingStatusText by mutableStateOf("Processando foto do cartão, aguarde...")
         private set
     var scanError by mutableStateOf<String?>(null)
         private set
+
+    // Front card image state
     var capturedImageBase64 by mutableStateOf<String?>(null)
         private set
     var originalUncroppedBase64 by mutableStateOf<String?>(null)
         private set
+    private var capturedBitmap: Bitmap? = null
+
+    // Back card image state (frente e verso)
+    var backImageBase64 by mutableStateOf<String?>(null)
+        private set
+    var backOriginalUncroppedBase64 by mutableStateOf<String?>(null)
+        private set
+    private var backCapturedBitmap: Bitmap? = null
+
+    // Toggle to scan the back side too (requested by user)
+    var scanBackSideEnabled by mutableStateOf(false)
+    var awaitingBackSideCapture by mutableStateOf(false)
+    var viewingFrontCard by mutableStateOf(true) // Switch between front and back in preview
+
     var isFramedAndEnhanced by mutableStateOf(false)
         private set
     var showOriginalPhoto by mutableStateOf(false)
-    private var capturedBitmap: Bitmap? = null
 
     fun toggleShowOriginal() {
         showOriginalPhoto = !showOriginalPhoto
@@ -112,6 +127,7 @@ class MainViewModel(
     var parsedPrimaryPhone by mutableStateOf("")
     var parsedSecondaryPhone by mutableStateOf("")
     var parsedLandlinePhone by mutableStateOf("")
+    var parsedEmail by mutableStateOf("")
     var parsedAddress by mutableStateOf("")
     var parsedObservations by mutableStateOf("")
     var parsedInstagram by mutableStateOf("")
@@ -152,10 +168,13 @@ class MainViewModel(
                     name = contact.name,
                     primaryPhone = contact.primaryPhone,
                     secondaryPhone = contact.secondaryPhone,
+                    landlinePhone = contact.landlinePhone,
+                    email = contact.email,
                     address = contact.address,
                     instagram = contact.instagram,
                     observations = contact.observations,
                     imageBase64 = contact.imageBase64,
+                    backImageBase64 = contact.backImageBase64,
                     useWhatsAppBusiness = useWhatsAppBusiness,
                     instagramFollowed = followOnInstagram
                 )
@@ -173,8 +192,136 @@ class MainViewModel(
         sharedPrefs.edit().putString("user_name", name).apply()
     }
 
-    // Set captured image, crop/frame to card only, remove shadows/borders, and analyze
+    // Called when a photo is taken (or picked from gallery)
     fun processSelectedImage(bitmap: Bitmap) {
+        if (scanBackSideEnabled && awaitingBackSideCapture) {
+            // This is the BACK image
+            processBackImageAndAnalyze(bitmap)
+        } else if (scanBackSideEnabled && !awaitingBackSideCapture) {
+            // This is the FRONT image, and the user requested back side too
+            processFrontImageAndPromptBack(bitmap)
+        } else {
+            // Standard single FRONT image flow
+            processSingleImage(bitmap)
+        }
+    }
+
+    // Process front image and wait for back image
+    private fun processFrontImageAndPromptBack(bitmap: Bitmap) {
+        isProcessingPhoto = true
+        processingStatusText = "Processando foto do cartão, aguarde..."
+        showOriginalPhoto = false
+        viewModelScope.launch(Dispatchers.Default) {
+            val resized = resizeBitmap(bitmap, 1920)
+
+            val ocrOrientation = try {
+                OfflineCardScanner.recognizeTextWithOrientation(resized)
+            } catch (e: Exception) {
+                null
+            }
+            val orientedBitmap = if (ocrOrientation != null && ocrOrientation.rotationDegrees != 0) {
+                OfflineCardScanner.rotateBitmap(resized, ocrOrientation.rotationDegrees.toFloat())
+            } else {
+                resized
+            }
+            val initialVisionText = if (ocrOrientation != null && ocrOrientation.rotationDegrees != 0) {
+                try { OfflineCardScanner.recognizeText(orientedBitmap) } catch (e: Exception) { null }
+            } else {
+                ocrOrientation?.text
+            }
+
+            val uncroppedBase64 = bitmapToBase64(orientedBitmap)
+            val processed = com.example.utils.CardImageProcessor.processCard(orientedBitmap, initialVisionText)
+            val finalCardBitmap = processed.finalBitmap
+            val finalCardBase64 = bitmapToBase64(finalCardBitmap)
+
+            withContext(Dispatchers.Main) {
+                capturedBitmap = finalCardBitmap
+                capturedImageBase64 = finalCardBase64
+                originalUncroppedBase64 = uncroppedBase64
+                isFramedAndEnhanced = processed.isFramed
+                awaitingBackSideCapture = true
+                isProcessingPhoto = false
+            }
+        }
+    }
+
+    // Process back image and trigger combined analysis
+    private fun processBackImageAndAnalyze(bitmap: Bitmap) {
+        isProcessingPhoto = true
+        processingStatusText = "Processando foto do cartão, aguarde..."
+        showOriginalPhoto = false
+        awaitingBackSideCapture = false
+        viewModelScope.launch(Dispatchers.Default) {
+            val resized = resizeBitmap(bitmap, 1920)
+
+            val ocrOrientation = try {
+                OfflineCardScanner.recognizeTextWithOrientation(resized)
+            } catch (e: Exception) {
+                null
+            }
+            val orientedBitmap = if (ocrOrientation != null && ocrOrientation.rotationDegrees != 0) {
+                OfflineCardScanner.rotateBitmap(resized, ocrOrientation.rotationDegrees.toFloat())
+            } else {
+                resized
+            }
+            val initialVisionText = if (ocrOrientation != null && ocrOrientation.rotationDegrees != 0) {
+                try { OfflineCardScanner.recognizeText(orientedBitmap) } catch (e: Exception) { null }
+            } else {
+                ocrOrientation?.text
+            }
+
+            val uncroppedBase64 = bitmapToBase64(orientedBitmap)
+            val processed = com.example.utils.CardImageProcessor.processCard(orientedBitmap, initialVisionText)
+            val finalCardBitmap = processed.finalBitmap
+            val finalCardBase64 = bitmapToBase64(finalCardBitmap)
+
+            withContext(Dispatchers.Main) {
+                backCapturedBitmap = finalCardBitmap
+                backImageBase64 = finalCardBase64
+                backOriginalUncroppedBase64 = uncroppedBase64
+                // Clear previous parsed fields
+                parsedName = ""
+                parsedPrimaryPhone = ""
+                parsedSecondaryPhone = ""
+                parsedLandlinePhone = ""
+                parsedEmail = ""
+                parsedAddress = ""
+                parsedObservations = ""
+                parsedInstagram = ""
+                scanError = null
+                processingStatusText = "Processando foto do cartão, aguarde..."
+                analyzeCardImage(preferOffline = true)
+            }
+        }
+    }
+
+    // Skip back side if user decides not to capture it and process only front
+    fun skipBackSideAndProcessOnlyFront() {
+        awaitingBackSideCapture = false
+        backCapturedBitmap = null
+        backImageBase64 = null
+        backOriginalUncroppedBase64 = null
+        parsedName = ""
+        parsedPrimaryPhone = ""
+        parsedSecondaryPhone = ""
+        parsedLandlinePhone = ""
+        parsedEmail = ""
+        parsedAddress = ""
+        parsedObservations = ""
+        parsedInstagram = ""
+        scanError = null
+        processingStatusText = "Processando foto do cartão, aguarde..."
+        analyzeCardImage(preferOffline = true)
+    }
+
+    fun cancelBackSideCapture() {
+        awaitingBackSideCapture = false
+        clearScannedState()
+    }
+
+    // Set captured image, crop/frame to card only, remove shadows/borders, and analyze
+    private fun processSingleImage(bitmap: Bitmap) {
         isProcessingPhoto = true
         processingStatusText = "Processando foto do cartão, aguarde..."
         showOriginalPhoto = false
@@ -194,17 +341,26 @@ class MainViewModel(
             }
 
             val resized = resizeBitmap(bitmap, 1920) // High-detail Full HD (up to 1920px)
-            val uncroppedBase64 = bitmapToBase64(resized)
 
-            // 2. Intelligent Card Framing (Enquadramento) & Shadow Removal (Remoção de Sombras)
-            var initialVisionText: com.google.mlkit.vision.text.Text? = null
-            try {
-                initialVisionText = OfflineCardScanner.recognizeText(resized)
+            // 2. Intelligent Card Orientation, Framing & Shadow Removal
+            val ocrOrientation = try {
+                OfflineCardScanner.recognizeTextWithOrientation(resized)
             } catch (e: Exception) {
-                Log.w("MainViewModel", "Erro ao pré-reconhecer texto para enquadramento: ${e.message}")
+                null
+            }
+            val orientedBitmap = if (ocrOrientation != null && ocrOrientation.rotationDegrees != 0) {
+                OfflineCardScanner.rotateBitmap(resized, ocrOrientation.rotationDegrees.toFloat())
+            } else {
+                resized
+            }
+            val initialVisionText = if (ocrOrientation != null && ocrOrientation.rotationDegrees != 0) {
+                try { OfflineCardScanner.recognizeText(orientedBitmap) } catch (e: Exception) { null }
+            } else {
+                ocrOrientation?.text
             }
 
-            val processed = com.example.utils.CardImageProcessor.processCard(resized, initialVisionText)
+            val uncroppedBase64 = bitmapToBase64(orientedBitmap)
+            val processed = com.example.utils.CardImageProcessor.processCard(orientedBitmap, initialVisionText)
             val finalCardBitmap = processed.finalBitmap
             val finalCardBase64 = bitmapToBase64(finalCardBitmap)
 
@@ -212,12 +368,16 @@ class MainViewModel(
                 capturedBitmap = finalCardBitmap
                 capturedImageBase64 = finalCardBase64
                 originalUncroppedBase64 = uncroppedBase64
+                backCapturedBitmap = null
+                backImageBase64 = null
+                backOriginalUncroppedBase64 = null
                 isFramedAndEnhanced = processed.isFramed
                 // Clear previous results upon capturing new image
                 parsedName = ""
                 parsedPrimaryPhone = ""
                 parsedSecondaryPhone = ""
                 parsedLandlinePhone = ""
+                parsedEmail = ""
                 parsedAddress = ""
                 parsedObservations = ""
                 parsedInstagram = ""
@@ -233,12 +393,18 @@ class MainViewModel(
         capturedImageBase64 = null
         capturedBitmap = null
         originalUncroppedBase64 = null
+        backImageBase64 = null
+        backCapturedBitmap = null
+        backOriginalUncroppedBase64 = null
         isFramedAndEnhanced = false
         showOriginalPhoto = false
+        awaitingBackSideCapture = false
+        viewingFrontCard = true
         parsedName = ""
         parsedPrimaryPhone = ""
         parsedSecondaryPhone = ""
         parsedLandlinePhone = ""
+        parsedEmail = ""
         parsedAddress = ""
         parsedObservations = ""
         parsedInstagram = ""
@@ -255,18 +421,19 @@ class MainViewModel(
             isProcessingPhoto = false
             return
         }
-        val currentBitmap = capturedBitmap
+        val currentFrontBitmap = capturedBitmap
+        val currentBackBitmap = backCapturedBitmap
         isScanning = true
         isProcessingPhoto = true
         scanError = null
         scanEngine = if (preferOffline) "offline" else "gemini"
-        processingStatusText = if (preferOffline) "Extraindo texto localmente (offline)..." else "Analisando cartão com IA Gemini..."
+        processingStatusText = "Processando foto do cartão, aguarde..."
 
         viewModelScope.launch(Dispatchers.IO) {
-            if (preferOffline && currentBitmap != null) {
+            if (preferOffline && currentFrontBitmap != null) {
                 try {
-                    Log.i("MainViewModel", "Iniciando extração On-Device (Offline) via ML Kit...")
-                    val offlineResult = OfflineCardScanner.analyzeCardOffline(currentBitmap)
+                    Log.i("MainViewModel", "Iniciando extração On-Device (Offline) via ML Kit (Frente + Verso se houver)...")
+                    val offlineResult = OfflineCardScanner.analyzeCardOffline(currentFrontBitmap, currentBackBitmap)
                     
                     // If offline scan returned something useful (at least a name or a phone), use it!
                     if (offlineResult.name.isNotBlank() || offlineResult.primaryPhone.isNotBlank() || (offlineResult.landlinePhone?.isNotBlank() == true)) {
@@ -275,6 +442,7 @@ class MainViewModel(
                             parsedPrimaryPhone = offlineResult.primaryPhone ?: ""
                             parsedSecondaryPhone = offlineResult.secondaryPhone ?: ""
                             parsedLandlinePhone = offlineResult.landlinePhone ?: ""
+                            parsedEmail = offlineResult.email ?: ""
                             parsedAddress = offlineResult.address ?: ""
                             parsedObservations = offlineResult.observations ?: ""
                             parsedInstagram = offlineResult.instagram ?: ""
@@ -286,7 +454,7 @@ class MainViewModel(
                     } else {
                         Log.w("MainViewModel", "Scan offline não detectou campos com alta confiança. Tentando Gemini se houver chave e internet...")
                         withContext(Dispatchers.Main) {
-                            processingStatusText = "Consultando IA Gemini para maior precisão..."
+                            processingStatusText = "Processando foto do cartão, aguarde..."
                         }
                     }
                 } catch (e: Exception) {
@@ -299,7 +467,6 @@ class MainViewModel(
                 scanEngine = "gemini"
                 val apiKey = BuildConfig.GEMINI_API_KEY
                 if (apiKey == "MY_GEMINI_API_KEY" || apiKey.isEmpty()) {
-                    // If no Gemini key is set, we still retain whatever offline scan did or inform the user
                     withContext(Dispatchers.Main) {
                         if (parsedName.isBlank() && parsedPrimaryPhone.isBlank() && parsedLandlinePhone.isBlank()) {
                             scanError = "Nenhum texto claro identificado no modo offline. Para enriquecer via IA Gemini online, configure a chave no painel de Secrets."
@@ -310,26 +477,48 @@ class MainViewModel(
                     return@launch
                 }
 
-                val prompt = """
-                    Você é um assistente especialista em extrair dados estruturados de cartões de visita, cartões empresariais, de prestação de serviços ou de vendedores de forma precisa.
-                    Analise a imagem em anexo deste cartão de visita de forma minuciosa e retorne os campos em formato JSON, conforme as propriedades abaixo:
-                    - name: O nome do contato ou marca/nome fantasia da empresa. ATENÇÃO CRUCIAL AO TÍTULO: Leia o título considerando a ênfase na posição (topo do cartão), disposição (palavras adjacentes horizontal e verticalmente) e desenho do logotipo. Exemplo: se houver 'DROGARIAS' e ao lado ou no desenho 'MAX', o nome é 'Drogarias Max' (ou 'Drogarias Max - Sempre ao seu lado' incluindo o slogan institucional). NUNCA corte o nome pela metade deixando apenas 'Drogarias'. NUNCA capture instruções operacionais como 'APONTE A CÂMERA DO CELULAR' como nome.
-                    - primaryPhone: O telefone principal do contato. ATENÇÃO: O telefone principal SEMPRE será o PRIMEIRO telefone que possui o ícone do WhatsApp ao lado (ícone verde de mensagem/WhatsApp) ou indicação de WhatsApp. Formato com DDD (exemplo: '(22) 99809-8903').
-                    - secondaryPhone: Se houver um SEGUNDO número com ícone ou indicação de WhatsApp, coloque-o aqui como secundário (exemplo: '(22) 99960-0653'). Se não houver, deixe vazio "".
-                    - landlinePhone: O telefone comum/fixo que possui apenas o ícone tradicional de aparelho/gancho telefônico (📞) ou indicação de fixo/telefone comum (exemplo: '(22) 2771-3643' ou com 8 dígitos). Se não houver, deixe vazio "".
-                    - address: O endereço físico completo constante no cartão. DEDUÇÃO DO ENDEREÇO: O endereço começa com indicador de logradouro (Av., Avenida, R., Rua, Logradouro, Estrada, Rodovia, etc.) e inclui toda a continuação de numeração, lojas/complemento e bairro que estiver na mesma área ou bloco (exemplo: 'Av. Jane Maria Martins Figueira, 947 Ljs. 06/07 - Jd. Marileia'). NUNCA coloque lojas, número ou bairro no campo de observações! Tudo que pertencer à localização física deve ficar integralmente no campo 'address'. Se não houver, deixe em branco "".
-                    - observations: Serviços, facilidades e ofertas (exemplo: 'Entrega a domicílio' ou 'Entrega em domicílio'). Note que esses textos normalmente estão destacados por linhas, caixas ou cor de fundo diferente e separados do endereço. Limpe quaisquer ruídos ou números de marcadores/bullets (ex: limpe '6 Entrega em domicílio' para 'Entrega em domicílio'). NUNCA coloque partes do endereço físico em observações. Se não houver, deixe em branco "".
-                    - instagram: O contato de Instagram (@usuario ou perfil/handle do Instagram) presente no cartão, se houver. Se não houver, preencha como string vazia "".
+                val hasBackImage = backImageBase64 != null
+                val prompt = if (hasBackImage) {
+                    """
+                        Você é um assistente especialista em extrair dados estruturados de cartões de visita físicos (frente e verso).
+                        Foram fornecidas DUAS imagens: a Imagem 1 é a FRENTE e a Imagem 2 é o VERSO do cartão.
+                        Analise ambas as imagens minuciosamente e retorne um JSON com os campos:
+                        - name: O nome do contato ou marca/nome fantasia da empresa. ATENÇÃO CRUCIAL AO TÍTULO: Leia o título de forma completa considerando a posição, disposição espacial (palavras adjacentes horizontal e verticalmente) e desenho do logotipo como imagem. Exemplo 1: se houver 'AVIVAR' (inclusive em logotipo/imagem no topo) e abaixo ou ao lado 'Clínica de Saúde', o nome completo é 'AVIVAR Clínica de Saúde'. Exemplo 2: se houver 'DROGARIAS' e 'MAX' ou slogan 'Sempre ao seu lado', o nome é 'Drogarias MAX - Sempre ao seu lado' (ou 'Drogarias MAX'). NUNCA corte o nome pela metade deixando apenas 'Clínica de Saúde' ou apenas 'Drogarias'. NUNCA capture instruções operacionais como 'APONTE A CÂMERA' como nome.
+                        - primaryPhone: Telefone principal (sempre o primeiro telefone com ícone do WhatsApp ou indicação de WhatsApp, número celular de 9 dígitos). Formato com DDD: '(22) 99781-0486'.
+                        - secondaryPhone: Se houver segundo telefone com WhatsApp (na frente ou verso), coloque aqui. Se não houver, vazio "".
+                        - landlinePhone: Telefone fixo/comum (número de 8 dígitos ou com ícone tradicional de telefone fixo/gancho, exemplo '(22) 3087-6777'). O telefone que não tiver ícone de WhatsApp ou que tiver ícone de telefone convencional é telefone fixo/comum e DEVE ser colocado aqui. Se não houver, vazio "".
+                        - email: Endereço de e-mail presente na frente ou no verso do cartão (exemplo: contato@empresa.com.br). Se não houver, vazio "".
+                        - address: Endereço físico completo constante no cartão (iniciando por Av., Rua, Rodovia, etc., incluindo número, lojas e bairro). Se não houver, vazio "".
+                        - observations: Concatene todos os serviços, facilidades, especialidades, horários, website, Facebook e TUDO O QUE FOR ESCRITO À MÃO POR UM HUMANO A CANETA (anotações manuscritas) presentes na frente e no verso que não pertençam aos campos estruturados acima.
+                        - instagram: Perfil ou @ do Instagram presente no cartão.
+                        Regra: Retorne APENAS o JSON válido.
+                    """.trimIndent()
+                } else {
+                    """
+                        Você é um assistente especialista em extrair dados estruturados de cartões de visita de forma precisa.
+                        Analise a imagem em anexo deste cartão de visita de forma minuciosa e retorne os campos em formato JSON:
+                        - name: O nome do contato ou marca/nome fantasia da empresa. ATENÇÃO CRUCIAL AO TÍTULO: Leia o título considerando a ênfase na posição (topo do cartão), disposição (palavras adjacentes horizontal e verticalmente) e desenho do logotipo como imagem. Exemplo 1: se houver a marca/palavra 'AVIVAR' (inclusive em logotipo/imagem no topo) e abaixo ou ao lado 'Clínica de Saúde', o nome completo é 'AVIVAR Clínica de Saúde'. Exemplo 2: se houver 'DROGARIAS' e ao lado ou no desenho 'MAX', o nome é 'Drogarias MAX' (ou 'Drogarias MAX - Sempre ao seu lado' incluindo o slogan institucional). NUNCA corte o nome pela metade deixando apenas 'Clínica de Saúde' ou apenas 'Drogarias'. NUNCA capture instruções operacionais como 'APONTE A CÂMERA DO CELULAR' como nome.
+                        - primaryPhone: O telefone principal do contato. ATENÇÃO: O telefone principal SEMPRE será o PRIMEIRO telefone que possui o ícone do WhatsApp ao lado ou indicação de WhatsApp (ou número celular móvel de 9 dígitos). Formato com DDD (exemplo: '(22) 99781-0486').
+                        - secondaryPhone: Se houver um SEGUNDO número com WhatsApp, coloque-o aqui. Se não houver, deixe vazio "".
+                        - landlinePhone: Telefone fixo/comum tradicional (com ícone tradicional de telefone fixo ou 8 dígitos, exemplo '(22) 3087-6777'). O telefone que tiver apenas ícone de telefone ou 'Telefone:' sem ícone de WhatsApp é fixo/comum e DEVE vir para este campo. Se não houver, deixe vazio "".
+                        - email: Endereço de e-mail presente no cartão. Se não houver, deixe vazio "".
+                        - address: O endereço físico completo constante no cartão. Se não houver, deixe vazio "".
+                        - observations: Serviços, especialidades, horários, website e TUDO O QUE FOR ESCRITO À MÃO POR UM HUMANO A CANETA (anotações manuscritas) que não pertençam aos outros campos estruturados.
+                        - instagram: Perfil ou @ do Instagram. Se não houver, deixe vazio "".
+                        Regra: Retorne APENAS o JSON válido.
+                    """.trimIndent()
+                }
 
-                    Regras cruciais:
-                    1. Retorne APENAS o JSON válido. Não coloque nenhum bloco explicativo, markdown ```json ou introdução comercial. Retorne o JSON diretamente que coincida exatamente com a estrutura de classe desejada.
-                    2. Se o campo for ausente no cartão, preencha como string vazia "" ou null no JSON.
-                """.trimIndent()
+                val partsList = mutableListOf<Part>()
+                partsList.add(Part(text = prompt))
+                partsList.add(Part(inlineData = InlineData(mimeType = "image/jpeg", data = base64Image)))
+                if (hasBackImage && backImageBase64 != null) {
+                    partsList.add(Part(inlineData = InlineData(mimeType = "image/jpeg", data = backImageBase64!!)))
+                }
 
-                val inlineData = InlineData(mimeType = "image/jpeg", data = base64Image)
                 val request = GenerateContentRequest(
                     contents = listOf(
-                        Content(parts = listOf(Part(text = prompt), Part(inlineData = inlineData)))
+                        Content(parts = partsList)
                     ),
                     generationConfig = GenerationConfig(
                         responseMimeType = "application/json"
@@ -378,7 +567,7 @@ class MainViewModel(
                     }
                 }
 
-                // Clean the response from markdown code fences if present (e.g. ```json ... ```)
+                // Clean the response from markdown code fences if present
                 var cleanJson = responseText.trim()
                 if (cleanJson.startsWith("```")) {
                     cleanJson = cleanJson.removePrefix("```json").removePrefix("```")
@@ -398,6 +587,7 @@ class MainViewModel(
                         parsedPrimaryPhone = parsed.primaryPhone ?: ""
                         parsedSecondaryPhone = parsed.secondaryPhone ?: ""
                         parsedLandlinePhone = parsed.landlinePhone ?: ""
+                        parsedEmail = parsed.email ?: ""
                         parsedAddress = parsed.address ?: ""
                         parsedObservations = parsed.observations ?: ""
                         parsedInstagram = parsed.instagram ?: ""
@@ -471,10 +661,12 @@ class MainViewModel(
                     primaryPhone = parsedPrimaryPhone,
                     secondaryPhone = parsedSecondaryPhone,
                     landlinePhone = parsedLandlinePhone,
+                    email = parsedEmail,
                     address = parsedAddress,
                     instagram = parsedInstagram,
                     observations = parsedObservations,
                     imageBase64 = capturedImageBase64 ?: "",
+                    backImageBase64 = backImageBase64 ?: "",
                     useWhatsAppBusiness = useWhatsAppBusiness,
                     instagramFollowed = instagramFollowed
                 )
@@ -503,10 +695,12 @@ class MainViewModel(
                         primaryPhone = contact.primaryPhone,
                         secondaryPhone = contact.secondaryPhone,
                         landlinePhone = contact.landlinePhone,
+                        email = contact.email,
                         address = contact.address,
                         instagram = contact.instagram,
                         observations = contact.observations,
                         imageBase64 = contact.imageBase64,
+                        backImageBase64 = contact.backImageBase64,
                         useWhatsAppBusiness = contact.useWhatsAppBusiness,
                         instagramFollowed = contact.instagramFollowed
                     )
@@ -517,10 +711,12 @@ class MainViewModel(
                         primaryPhone = contact.primaryPhone,
                         secondaryPhone = contact.secondaryPhone,
                         landlinePhone = contact.landlinePhone,
+                        email = contact.email,
                         address = contact.address,
                         instagram = contact.instagram,
                         observations = contact.observations,
                         imageBase64 = contact.imageBase64,
+                        backImageBase64 = contact.backImageBase64,
                         useWhatsAppBusiness = contact.useWhatsAppBusiness,
                         instagramFollowed = contact.instagramFollowed
                     )
@@ -564,12 +760,6 @@ class MainViewModel(
         val hour = calendar.get(Calendar.HOUR_OF_DAY)
         val minute = calendar.get(Calendar.MINUTE)
         
-        // Define according to direct requirements rules:
-        // Se a hora for entre 00:01 e 11:59 -> saudacoes = Bom dia.
-        // Se a hora for entre 12:00 e 17:59 -> saudacoes = Boa tarde.
-        // Se a hora for entre 18:00 e 23:59 -> saudacoes = Boa noite.
-        // What about 00:00? Let's treat it as Bom dia or Boa noite.
-        
         return if (hour == 0 && minute == 0) {
             "Boa noite."
         } else if ((hour == 0 && minute > 0) || (hour in 1..11)) {
@@ -610,15 +800,35 @@ class MainViewModel(
         return Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
     }
 
-    private fun normalizeContactTitle(name: String): String {
+    fun normalizeContactTitle(name: String): String {
         val trimmed = name.trim()
         val lower = trimmed.lowercase()
-        if (lower.contains("drogarias") || lower.contains("drogaria")) {
-            if (lower.contains("sempre ao seu lado") || lower.contains("ao seu lado")) {
-                return "Drogarias MAX - Sempre ao seu lado"
+
+        // AVIVAR Clínica de Saúde rule
+        val avivarRegex = Regex("""(?i)\b(?:avivar|av1var|av-var)\b""")
+        if (avivarRegex.containsMatchIn(lower) || lower.contains("avivar")) {
+            val hasClinicaOuSaude = lower.contains("clínica") || lower.contains("clinica") ||
+                    lower.contains("saúde") || lower.contains("saude")
+            return if (hasClinicaOuSaude) {
+                "AVIVAR Clínica de Saúde"
+            } else {
+                "AVIVAR"
             }
-            if (lower.contains("max") || lower == "drogarias" || lower == "drogaria") {
-                return "Drogarias MAX"
+        }
+        if (lower.startsWith("clínica de saúde") || lower.startsWith("clinica de saude")) {
+            return "AVIVAR Clínica de Saúde"
+        }
+
+        // Drogarias MAX rule
+        if (lower.contains("drogarias") || lower.contains("drogaria")) {
+            val hasSlogan = lower.contains("sempre ao seu lado") ||
+                    lower.contains("ao seu lado") ||
+                    lower.contains("sempre") ||
+                    lower.contains("lado")
+            return if (hasSlogan) {
+                "Drogarias MAX - Sempre ao seu lado"
+            } else {
+                "Drogarias MAX"
             }
         }
         return trimmed
