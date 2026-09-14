@@ -12,7 +12,8 @@ import android.util.Base64
 
 object CardBeamTransferHelper {
 
-    const val MIME_TYPE_ZAPDECK = "application/vnd.com.aistudio.zapdeck.card"
+    const val MIME_TYPE_ZAPDECK = "application/vnd.br.com.facbentes.zapdeck.card"
+    const val MIME_TYPE_ZAPDECK_LEGACY = "application/vnd.com.aistudio.zapdeck.card"
     const val URI_SCHEME_ZAPDECK = "zapdeck"
 
     /**

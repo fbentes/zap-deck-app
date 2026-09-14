@@ -1,6 +1,6 @@
-# Regras Mandatórias e Permanentes da Aplicação - Extrai Cartão
+# Regras Mandatórias e Permanentes da Aplicação - ZapDeck
 
-As diretrizes a seguir são regras estritas de funcionamento e design do aplicativo **Extrai Cartão**. Elas foram definidas pelo usuário e NUNCA devem ser alteradas, relaxadas ou esquecidas.
+As diretrizes a seguir são regras estritas de funcionamento e design do aplicativo **ZapDeck** (conhecido na fase inicial de concepção pelo codinome histórico *Extrai Cartão*). Elas foram definidas pelo usuário e NUNCA devem ser alteradas, relaxadas ou esquecidas.
 
 ---
 

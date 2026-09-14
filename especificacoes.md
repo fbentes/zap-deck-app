@@ -1,100 +1,112 @@
-# Documento de Especificações Técnicas - Extrai Cartão
+# Documento de Especificações Técnicas - ZapDeck
 
-Este documento apresenta as especificações completas de funcionamento e arquitetura do aplicativo **Extrai Cartão**, projetado para automatizar a captura de dados de cartões de visita e agilizar o contato direto via WhatsApp.
+Este documento apresenta as especificações completas de funcionamento e arquitetura do aplicativo **ZapDeck** (conhecido na fase inicial de concepção pelo codinome histórico *Extrai Cartão*), projetado para automatizar a captura, enquadramento, digitalização e categorização de dados de cartões de visita físicos, com armazenamento local seguro e agilidade no contato direto via WhatsApp, NFC e QR Code.
 
 ---
 
 ## 1. Visão Geral do Sistema
 
-O **Extrai Cartão** é uma ferramenta de produtividade para profissionais em campo, vendedores e prestadores de serviço. O aplicativo automatiza um fluxo de trabalho moroso:
-1. Recebimento ou visualização de um cartão de visita físico.
-2. Digitação manual dos campos de contato no smartphone.
-3. Envio de uma mensagem de introdução no WhatsApp para registrar o contato.
+O **ZapDeck** é uma ferramenta de produtividade para profissionais em campo, vendedores, empresários e prestadores de serviço. O aplicativo automatiza um fluxo de trabalho moroso:
+1. Recebimento ou visualização de um cartão de visita físico (frente e verso).
+2. Enquadramento milimétrico, eliminação de fundo (mesas/escrivaninhas) e remoção de sombras.
+3. Leitura e estruturação instantânea de contatos por visão computacional local (On-Device ML Kit).
+4. Persistência offline em banco de dados local seguro (Room / SQLite).
+5. Envio ágil de mensagem de introdução no WhatsApp para registrar o contato.
+6. Compartilhamento digital via QR Code dinâmico, NFC Beam (transmissão por aproximação) e vCard nativo.
 
-Através do uso de visão computacional e inteligência artificial generativa multimodal (Gemini 3.5 Flash), o aplicativo resolve essa dor ao capturar/ler o cartão, extrair todos os dados estruturados instantaneamente, salvar localmente, permitir exportação para a agenda interna do Android e disparar uma mensagem pré-formatada direta para o WhatsApp do contato.
+O processamento padrão do **ZapDeck** é **100% On-Device (Local)** através do Google ML Kit Latin Text Recognition e do motor proprietário `CardImageProcessor`. De forma opcional e com transparência na interface, o usuário pode acionar um enriquecimento multimodal na nuvem via API do Gemini (quando conectado à internet e com credencial configurada).
 
 ---
 
 ## 2. Requisitos Funcionais (RF)
 
-### RF01 - Captura Multimodal de Cartões
-O usuário deve poder alimentar o sistema de duas formas:
-- **Câmera**: Capturar uma nova fotografia em tempo real.
-- **Galeria**: Selecionar uma foto de cartão salva de maneira prévia no álbum de fotos (essencial para agilidade de demonstração e testes).
+### RF01 - Captura Multimodal de Cartões (Frente e Verso)
+O usuário pode alimentar o sistema de duas formas:
+- **Câmera**: Capturar uma nova fotografia em tempo real (com suporte a captura sequencial de frente e verso).
+- **Galeria**: Selecionar fotografias salvas previamente no álbum do dispositivo.
 
-### RF02 - Extração de Dados Inteligente por IA
-O sistema deve enviar a imagem para a API do Gemini com instruções detalhadas para extrair os seguintes campos:
-- **Nome do Contato ou Nome Fantasia**: Priorizando o elemento principal ou comercial.
-- **Telefone Principal**: O telefone que tiver indicativo de WhatsApp (ícone verde de telefone/mensagem ao lado ou a palavra "WhatsApp").
-- **Telefone Secundário**: Outro celular ou telefone fixo listado, caso exista.
-- **Endereço**: Endereço comercial completo listado no cartão.
-- **Observações**: Descrição condensada dos serviços oferecidos ou slogans presentes no cartão de maneira resumida.
+### RF02 - Enquadramento Automático e Remoção de Sombras (`CardImageProcessor`)
+O sistema processa a imagem para:
+- Detectar a geometria retangular do cartão físico, descartando 100% de fundos externos (madeira, toalhas, dedos).
+- Remover sombras pontuais (mãos, celular) e equalizar iluminação e contraste.
+- Detectar a orientação correta de leitura (0°, 90°, 180°, 270°) e rotacionar a imagem automaticamente.
+- Salvar e exibir por padrão a versão otimizada e limpa.
 
-### RF03 - Tratamento de Campos Inexistentes
-Se o cartão analisado não contiver endereço, telefone secundário ou observações, o aplicativo deve deixar os respectivos campos vazios de forma automática, permitindo edição manual.
+### RF03 - Extração Estruturada Local e Classificação Rigorosa
+O motor local analisa espacialmente e categoriza:
+- **Nome / Razão Social / Marca**: Nome completo da empresa, clínica, consultório ou profissional (ex: "AVIVAR Clínica de Saúde", "DROGARIAS MAX").
+- **WhatsApp Principal**: Celulares de 9 dígitos ou acompanhados de ícones e termos de WhatsApp.
+- **Telefone Fixo**: Números de 8 dígitos convencionais ou marcados com telefone tradicional.
+- **Telefone Secundário**: Canais telefônicos adicionais ou identificados no verso.
+- **Endereço Comercial**: Logradouro, número, complementos (lojas, salas), bairro, cidade e CEP.
+- **Redes Sociais e E-mail**: Instagram (@perfil) e e-mail comercial.
+- **Anotações Manuscritas e Serviços**: Digitalização de notas feitas a caneta (atendentes, horários, telefones extras) e serviços ofertados.
 
-### RF04 - Tela de Confirmação e Edição
-Antes de salvar os resultados analisados pela IA no banco de dados local, os dados estruturados devem ser exibidos ao usuário em um formulário intuitivo, garantindo que o usuário possa corrigir qualquer dado impreciso ou alterar valores.
+### RF04 - Fallback Remoto Inteligente (Gemini API)
+Caso o usuário deseje enriquecer a extração ou em cartões com diagramação incomum, é possível solicitar uma análise adicional via API Gemini, informando na interface quando a requisição é online.
 
-### RF05 - Persistência Local (Offline-First)
-Os contatos escaneados (incluindo metadados e imagem capturada comprimida) devem ser mantidos localmente no dispositivo em um banco de dados Room SQLite, não dependendo de conexão futura com servidores para consulta.
+### RF05 - Tela de Confirmação, Edição e Visualização Alternada
+Antes de salvar, o usuário revisa todos os campos, podendo editar dados e alternar a visualização da imagem entre o cartão enquadrado/sem sombras e a foto original de captura.
 
-### RF06 - Cadastro do Usuário Proprietário (usuario_android)
-O proprietário deve poder configurar seu próprio nome em um menu/preferências, para que as mensagens geradas tragam a identificação correta automaticamente.
+### RF06 - Persistência Local (Offline-First com Room)
+Todos os contatos e imagens são salvos localmente no dispositivo em SQLite via Room. Nenhuma informação pessoal é enviada a servidores sem a ação expressa do usuário.
 
-### RF07 - Modelo de Mensagem de Introdução (WhatsApp)
-Após salvar o contato, o aplicativo deve gerar e permitir enviar uma mensagem via WhatsApp no seguinte formato:
-- **Lógica de Saudação**:
-  - `00:01` a `11:59` -> *"Bom dia."*
-  - `12:00` a `17:59` -> *"Boa tarde."*
-  - `18:00` a `23:59` -> *"Boa noite."*
-- **Lógica do Corpo**:
-  - *"Aqui é o(a) [usuario_android]. Envio essa mensagem para registro e contato breve."*
-- **Execução**:
-  - Abrir diretamente o WhatsApp por meio de Deep Link (`Intent.ACTION_VIEW`), pré-carregando a mensagem no chat específico sem precisar cadastrar o contato na lista telefônica previamente.
+### RF07 - Identificação do Proprietário (`usuario_android`)
+O proprietário cadastra seu nome nas configurações do app para personalizar automaticamente as saudações e mensagens de introdução.
 
-### RF08 - Sincronização com Contatos Nativos
-O usuário deve ter uma opção direta para exportar o registro local para a agenda de contatos padrão do Android (através do `ContactsContract` através de Intents de inserção nativos).
+### RF08 - Envio Ágil de Mensagem no WhatsApp
+Gera saudações dinâmicas conforme a hora local ("Bom dia", "Boa tarde", "Boa noite") acompanhadas de mensagem de apresentação, abrindo a conversa via Intent padrão sem exigir pré-cadastro na agenda.
+
+### RF09 - Sincronização com a Agenda Nativa do Android
+Opção direta de exportar qualquer contato salvo para a agenda de contatos do Android (`ContactsContract`).
+
+### RF10 - Compartilhamento Digital (QR Code, NFC e vCard)
+- **QR Code**: Geração de QR Code vCard para que terceiros capturem o contato diretamente pela câmera.
+- **NFC Beam**: Transmissão por aproximação entre dispositivos com NFC habilitado.
+- **Compartilhamento de APK**: Permite compartilhar o instalador do ZapDeck diretamente com outros aparelhos.
 
 ---
 
-## 3. Requisitos Não Funcionais (RNF)
+### 3. Requisitos Não Funcionais (RNF)
 
 ### RNF01 - Velocidade e Tempo de Resposta
-A análise de imagem do cartão de visita e o retorno estruturado via API do Gemini 3.5 Flash devem ocorrer, sob conexão celular ou Wi-Fi estável, em menos de 5 segundos.
+O processamento On-Device (ML Kit + enquadramento e remoção de sombras) ocorre em menos de 1 segundo diretamente no smartphone, sem depender de conexão de rede. Caso o fallback online do Gemini seja acionado pelo usuário, a inferência deve responder em até 5 segundos sob conexão estável.
 
-### RNF02 - Design de UI Moderno (Material You)
-A aplicação deve ser desenvolvida em Jetpack Compose, utilizando as diretrizes do Material Design 3, com suporte a transições suaves e design que priorize a usabilidade para uso com uma só mão.
+### RNF02 - Design de UI Moderno (Material Design 3)
+Aplicação desenvolvida 100% em Jetpack Compose, utilizando as diretrizes do Material 3 com tipografia legível, contraste aprimorado, tema claro e escuro, e layout adaptável para uso ágil com uma só mão.
 
-### RNF03 - Segurança dos Dados do Proprietário
-Diferente de contatos em nuvem proprietária, os dados armazenados não devem ser transmitidos a servidores terceiros além da inferência segura na API do Gemini. As chaves de serviço ficam protegidas em arquivos `.env` injetados dinamicamente via Gradle, não permanecendo expostas em código.
+### RNF03 - Privacidade, LGPD e Minimização de Dados
+O aplicativo funciona em modo local-first. As imagens e contatos ficam restritos ao banco Room no armazenamento privado do dispositivo. Nenhuma foto ou contato é enviado para servidores externos sem ação expressa do usuário. Não são coletados dados analíticos ou de telemetria sem consentimento.
 
 ---
 
 ## 4. Arquitetura da Solução
 
-O sistema adota o padrão recomendado para desenvolvimento Android moderno:
+O sistema adota o padrão MVVM com separação modular de responsabilidades:
 
 ```
 ───────────────────────────────────────────────────────────────────────
-|                     INTERFACE COM JOVEM COMPOSE (UI)                 |
+|                     INTERFACE JETPACK COMPOSE (UI)                   |
 ───────────────────────────────────────────────────────────────────────
                                   │
-                       Observa estado via Flow
+                       Observa estado via StateFlow
                                   ▼
 ───────────────────────────────────────────────────────────────────────
 |                             VIEWMODEL                               |
 ───────────────────────────────────────────────────────────────────────
-            │                                             │
-   Salva e consulta contatos                    Realiza análise multimodal
-            ▼                                             ▼
-────────────────────────────────────           ────────────────────────
-|       REPOSITORY / DAO (ROOM)     |           |  GEMINI SERVICE (API) |
-────────────────────────────────────           ────────────────────────
+       │                          │                         │
+       ▼                          ▼                         ▼
+───────────────          ───────────────────       ────────────────────
+| ROOM DAO/DB |          | OFFLINE ML KIT  |       | GEMINI SERVICE   |
+| Persistência|          | & IMAGE ENGINE  |       | Fallback Remoto  |
+───────────────          ───────────────────       ────────────────────
 ```
 
 ### Tecnologias-Chave:
-- **Linguagem**: Kotlin 2.2+
-- **Compilação**: SDK 36, compatível do Android Oreo (minSdk 24) ao Android 11-15+
-- **Interface**: Jetpack Compose Com Material 3
-- **Injeção de IA**: Base64 JPEG Multiplatform REST request enviada ao modelo `gemini-3.5-flash`.
+- **Linguagem**: Kotlin
+- **Compilação**: Android SDK 36 (compatibilidade a partir do Android 7.0 - minSdk 24)
+- **Interface**: Jetpack Compose com Material Design 3
+- **Visão Computacional Local**: Google ML Kit Latin Text Recognition + `CardImageProcessor`
+- **Banco de Dados Local**: Room Database com SQLite
+- **Integrações de Sistema**: NFC (HCE e NDEF Beam), ZXing QR Code, ContactsContract, WhatsApp Intent
+- **IA Multimodal (Fallback)**: Retrofit / Moshi com API Gemini (opcional e transparente)

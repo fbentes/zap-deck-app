@@ -1,0 +1,37 @@
+PROGRAMA: ZapDeck
+VERSÃO: 1.0.0
+PLATAFORMA: Android
+
+REPOSITÓRIO:
+https://github.com/facbentes/zap-deck-app
+
+TAG DO REGISTRO:
+inpi-v1.0.0
+
+COMMIT DO REGISTRO:
+[PREENCHER APÓS O CONGELAMENTO]
+
+AUTOR:
+[NOME CIVIL COMPLETO]
+
+TITULAR:
+[NOME CIVIL COMPLETO OU RAZÃO SOCIAL]
+
+DESCRIÇÃO:
+Aplicativo Android para digitalização, reconhecimento e
+gerenciamento de cartões de visita e contatos. Inclui
+reconhecimento de texto, armazenamento local, sincronização
+com a agenda, cartões digitais, QR Code, NFC e mecanismos de
+compartilhamento.
+
+LINGUAGEM:
+Kotlin
+
+TECNOLOGIAS PRINCIPAIS:
+Android SDK, Jetpack Compose, Room, SQLite e ML Kit.
+
+DATA DE CONCLUSÃO DA VERSÃO:
+[PREENCHER COM A DATA REAL]
+
+DATA DE PUBLICAÇÃO:
+[PREENCHER SOMENTE SE A VERSÃO FOI DISPONIBILIZADA AO PÚBLICO]

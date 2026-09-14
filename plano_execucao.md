@@ -1,6 +1,6 @@
-# Plano de Execução - App Extrai Cartão
+# Plano de Execução - ZapDeck
 
-Este plano detalha o desenvolvimento do aplicativo Android para extração de dados de cartões de visita usando Inteligência Artificial (Gemini API) e salvamento local.
+Este plano detalha o ciclo de desenvolvimento do aplicativo Android **ZapDeck** (inicialmente concebido sob o codinome de trabalho *Extrai Cartão*), cobrindo a extração de dados de cartões de visita usando visão computacional On-Device (Google ML Kit), enquadramento e remoção de sombras, suporte opcional à API Gemini e salvamento local.
 
 ## 1. Escopo das Funcionalidades
 
