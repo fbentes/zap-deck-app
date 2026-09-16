@@ -1,4 +1,4 @@
-PROGRAMA: ZapDeck
+﻿PROGRAMA: ZapDeck
 VERSÃO: 1.0.0
 PLATAFORMA: Android
 
@@ -9,13 +9,13 @@ TAG DO REGISTRO:
 inpi-v1.0.0
 
 COMMIT DO REGISTRO:
-[PREENCHER APÓS O CONGELAMENTO]
+Commit identificado pela tag Git inpi-v1.0.0
 
 AUTOR:
-[NOME CIVIL COMPLETO]
+Fábio Anderson Corrêa Bentes
 
 TITULAR:
-[NOME CIVIL COMPLETO OU RAZÃO SOCIAL]
+Fábio Anderson Corrêa Bentes
 
 DESCRIÇÃO:
 Aplicativo Android para digitalização, reconhecimento e
@@ -31,7 +31,7 @@ TECNOLOGIAS PRINCIPAIS:
 Android SDK, Jetpack Compose, Room, SQLite e ML Kit.
 
 DATA DE CONCLUSÃO DA VERSÃO:
-[PREENCHER COM A DATA REAL]
+15/09/2026
 
 DATA DE PUBLICAÇÃO:
-[PREENCHER SOMENTE SE A VERSÃO FOI DISPONIBILIZADA AO PÚBLICO]
+15/09/2026 (Repositório de código-fonte publicado)
