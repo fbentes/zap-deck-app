@@ -3,7 +3,7 @@ VERSÃO: 1.0.0
 PLATAFORMA: Android
 
 REPOSITÓRIO:
-https://github.com/facbentes/zap-deck-app
+https://github.com/fbentes/zap-deck-app
 
 TAG DO REGISTRO:
 inpi-v1.0.0

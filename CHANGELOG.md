@@ -7,6 +7,18 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [1.0.1] - 2026-09-15
+
+### Adicionado
+- **Vitrine e Seletor de Novos Ícones**: Diálogo interativo para escolha de opções de design de ícone do aplicativo com pré-visualização e confirmação.
+- **Créditos do Criador**:
+  - Inclusão da foto real do criador Fábio A. C. Bentes na tela de seleção de novos ícones;
+  - Modal de visualização expandida da foto do criador com acabamento e alta fidelidade visual;
+  - Ícone e atalho direto integrado para o perfil oficial no LinkedIn (`https://www.linkedin.com/in/fabio-bentes/`).
+- **Asset Vetorial**: Ícone vetorial oficial customizado do LinkedIn (`ic_linkedin_custom.xml`).
+
+---
+
 ## [1.0.0] - 2026-09-14
 
 ### Adicionado

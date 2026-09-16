@@ -40,7 +40,7 @@ Após o reconhecimento, os dados são salvos localmente e podem ser transmitidos
 O projeto adota o padrão moderno **MVVM (Model-View-ViewModel)** com **Jetpack Compose** e **Material Design 3**:
 
 ```
-app/src/main/java/com/example/ (migração planejada para br.com.facbentes.zapdeck)
+app/src/main/java/br/com/facbentes/zapdeck/
 ├── api/             # Modelos e cliente Retrofit para o fallback Gemini
 ├── data/            # Entidades Room, Data Access Object (DAO) e Repositório local
 ├── ui/              # Telas, animações de processamento, diálogos e tema Material 3
@@ -105,5 +105,5 @@ gradle :app:assembleDebug
 ## 8. Titularidade, Autoria e Licença
 
 - **Produto**: ZapDeck
-- **Repositório Oficial**: `https://github.com/facbentes/zap-deck-app`
+- **Repositório Oficial**: `https://github.com/fbentes/zap-deck-app`
 - **Autor / Titular**: Todos os direitos patrimoniais e autorais reservados. Software desenvolvido para registro perante o Instituto Nacional da Propriedade Industrial (INPI).
