@@ -4,6 +4,30 @@ Aplicativo Android nativo para captura inteligente, enquadramento milimétrico, 
 
 ---
 
+## Visão geral e arquitetura
+
+![Arquitetura técnica do ZapDeck](docs/arquitetura.svg)
+
+| Camada | Tecnologias |
+|---|---|
+| **Linguagem e UI** | Kotlin, Jetpack Compose, Material Design 3 |
+| **Arquitetura** | MVVM, com estado reativo via StateFlow e Coroutines |
+| **Imagem** | `CardImageProcessor` próprio: enquadramento, remoção de fundo e sombras e rotação automática |
+| **Reconhecimento** | Google ML Kit (OCR on-device) com fallback opcional para Google Gemini multimodal (Retrofit + Moshi) |
+| **Dados** | Room / SQLite, 100% local |
+| **Saídas** | WhatsApp, agenda do Android, QR Code vCard (ZXing), NFC (HCE e NDEF Beam) |
+| **Qualidade** | JUnit, Robolectric e Roborazzi (testes de captura de tela) |
+
+### Telas de exemplo
+
+As imagens abaixo foram geradas pelos testes de captura (Robolectric/Roborazzi), com **contatos fictícios**.
+
+| Tela inicial | Lista de cartões |
+|:--:|:--:|
+| <img src="docs/imagens/01-boas-vindas.png" width="260"> | <img src="docs/imagens/02-lista-de-cartoes.png" width="260"> |
+
+---
+
 ## 1. Finalidade
 
 O **ZapDeck** tem como propósito eliminar a digitação manual de contatos comerciais a partir de cartões de visita físicos (frente e verso). Através de visão computacional em dispositivo (*On-Device*) e processamento de imagem dedicado, o aplicativo enquadra o cartão físico, remove fundos indesejados (como mesas ou escrivaninhas), atenua sombras e extrai de forma estruturada:
