@@ -130,4 +130,4 @@ gradle :app:assembleDebug
 
 - **Produto**: ZapDeck
 - **Repositório Oficial**: `https://github.com/fbentes/zap-deck-app`
-- **Autor / Titular**: Todos os direitos patrimoniais e autorais reservados. Software desenvolvido para registro perante o Instituto Nacional da Propriedade Industrial (INPI).
+- **Autor / Titular**: Todos os direitos patrimoniais e autorais reservados. Software desenvolvido para registro perante o Instituto Nacional da Propriedade Industrial (INPI - Processo nº 512026008981-6). 
