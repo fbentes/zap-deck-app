@@ -131,3 +131,6 @@ gradle :app:assembleDebug
 - **Produto**: ZapDeck
 - **Repositório Oficial**: `https://github.com/fbentes/zap-deck-app`
 - **Autor / Titular**: Todos os direitos patrimoniais e autorais reservados. Software desenvolvido para registro perante o Instituto Nacional da Propriedade Industrial (INPI - Processo nº 512026008981-6). 
+- **Registro no INPI**: Processo nº `512026008981-6`, programa de computador (Lei nº 9.609/1998), versão 1.0.0 (tag `inpi-v1.0.0`).
+- **Hash SHA-512 do código-fonte registrado**: `1e9e56d607f9b9957216e0aa12c793386313cb8ff14bc8129bf43679dfa37800c5bd71faead6f4ad0f566acb2604e2c2854dbc25e2a05f471a25f5bc90b9a639`
+- **Consulta pública**: [busca.inpi.gov.br](https://busca.inpi.gov.br/pePI/), em Programa de Computador.
