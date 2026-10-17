@@ -132,6 +132,11 @@ class MainViewModel(
     var parsedAddress by mutableStateOf("")
     var parsedObservations by mutableStateOf("")
     var parsedInstagram by mutableStateOf("")
+    var parsedFacebook by mutableStateOf("")
+
+    // true enquanto o contato esta sendo gravado na agenda do celular (mostra o overlay de salvando)
+    var isSaving by mutableStateOf(false)
+        private set
 
     // List of states for viewing/editing saved contacts
     var showingManualAdd by mutableStateOf(false)
@@ -173,6 +178,7 @@ class MainViewModel(
                     email = contact.email,
                     address = contact.address,
                     instagram = contact.instagram,
+                    facebook = contact.facebook,
                     observations = contact.observations,
                     imageBase64 = contact.imageBase64,
                     backImageBase64 = contact.backImageBase64,
@@ -290,6 +296,7 @@ class MainViewModel(
                 parsedAddress = ""
                 parsedObservations = ""
                 parsedInstagram = ""
+                parsedFacebook = ""
                 scanError = null
                 processingStatusText = "Processando foto do cartão, aguarde..."
                 analyzeCardImage(preferOffline = true)
@@ -311,6 +318,7 @@ class MainViewModel(
         parsedAddress = ""
         parsedObservations = ""
         parsedInstagram = ""
+        parsedFacebook = ""
         scanError = null
         processingStatusText = "Processando foto do cartão, aguarde..."
         analyzeCardImage(preferOffline = true)
@@ -382,6 +390,7 @@ class MainViewModel(
                 parsedAddress = ""
                 parsedObservations = ""
                 parsedInstagram = ""
+                parsedFacebook = ""
                 scanError = null
                 processingStatusText = "Processando foto do cartão, aguarde..."
                 // Default: Try fast 100% on-device (offline) scanning first with clean framed card
@@ -409,6 +418,7 @@ class MainViewModel(
         parsedAddress = ""
         parsedObservations = ""
         parsedInstagram = ""
+        parsedFacebook = ""
         scanError = null
         isScanning = false
         isProcessingPhoto = false
@@ -446,6 +456,7 @@ class MainViewModel(
                             parsedLandlinePhone = ensurePhoneDdd(offlineResult.landlinePhone ?: "", parsedAddress)
                             parsedEmail = offlineResult.email ?: ""
                             parsedInstagram = OfflineCardScanner.cleanInstagramHandle(offlineResult.instagram ?: "", parsedName + " " + parsedAddress)
+                            parsedFacebook = cleanFacebookValue(offlineResult.facebook ?: "")
                             parsedObservations = sanitizeObservations(
                                 rawObservations = offlineResult.observations ?: "",
                                 name = parsedName,
@@ -454,6 +465,7 @@ class MainViewModel(
                                 landlinePhone = parsedLandlinePhone,
                                 email = parsedEmail,
                                 instagram = parsedInstagram,
+                                facebook = parsedFacebook,
                                 address = parsedAddress
                             )
                             isScanning = false
@@ -501,6 +513,11 @@ class MainViewModel(
                         - address: Endereço físico completo constante no cartão (iniciando por Av., Rua, Rodovia, etc., incluindo número, lojas e bairro). Se não houver, vazio "".
                         - observations: Concatene todos os serviços, facilidades, especialidades, horários e TUDO O QUE FOR ESCRITO À MÃO POR UM HUMANO A CANETA (anotações manuscritas) presentes na frente e no verso. REGRA MANDATÓRIA DE LABELS: Qualquer rótulo ou label posicionado acima ou ao lado de dados (como 'WhatsApp', 'Telefone', 'Tel', 'Fixo', 'Celular', 'Instagram', 'E-mail', 'Endereço', etc.) serve EXCLUSIVAMENTE para distinguir o tipo do campo e NUNCA deve ser colocado no campo de observações. Coloque em observações APENAS o que realmente NÃO for campo, label ou dado estruturado encontrado anteriormente.
                         - instagram: Perfil ou @ do Instagram presente no cartão (exemplo: '@DYNASTY_FUT'). ATENÇÃO CRUCIAL AO SÍMBOLO '@': Muitas fontes estilizadas desenham o arroba '@' parecido com a letra 'e' minúscula ou 'eDYNASTY_FUT'. O perfil do Instagram NUNCA deve vir com a letra 'e' no lugar do '@'. O handle correto SEMPRE deve ser '@DYNASTY_FUT'.
+                        - facebook: Perfil ou página do Facebook, identificado pelo ÍCONE do Facebook (a letra 'f' branca em círculo ou quadrado azul) ou pelo rótulo 'Facebook', 'Face', 'FB' ou 'fb.com/'. Exemplo: 'América Rio das Ostras' ou 'fb.com/minhaempresa'. Retorne só o nome da página/usuário ou o link, SEM o rótulo. Se não houver, deixe vazio "".
+                        REGRA DE ÍCONES: identifique cada dado PELO ÍCONE ao lado quando não houver rótulo escrito: balão verde com telefone = WhatsApp; câmera/quadrado arredondado com círculo = Instagram; letra 'f' = Facebook; pino de mapa = endereço; envelope = e-mail; aparelho de telefone = telefone fixo. Texto ao lado de um ícone pertence ao campo desse ícone.
+                        REGRA DE LEITURA: o texto pode estar em fundo colorido, com contraste baixo, sombra ou perspectiva; leia mesmo assim. Corrija confusões de OCR entre o número 0 e a letra O dentro de palavras (ex.: 'MICR0' deve ser 'MICRO'). Preserve acentos.
+                        REGRA DO TÍTULO: name é apenas o título/marca principal em destaque no topo. Subtítulos menores logo abaixo que indicam cidade ou bairro (ex.: 'RIO DAS OSTRAS') NÃO fazem parte do name; coloque-os em observations. Complementos que formam a marca (ex.: 'Clínica de Saúde' junto de 'AVIVAR') continuam no name.
+                        REGRA DE OBSERVAÇÕES: em observations coloque TODAS as demais informações sem rótulo de campo: serviços, produtos, categorias (ex.: 'Manutenção em geral e acessórios', 'Celulares, Notebooks, Computadores, Tablets'), marcas atendidas (logotipos como Motorola, Nokia, Apple, Xiaomi, Samsung, LG, Asus), horários, cidade/subtítulo e anotações manuscritas, separadas por ' | '. Nunca repita aqui nome, telefones, e-mail, Instagram, Facebook ou endereço.
                         Regra: Retorne APENAS o JSON válido.
                     """.trimIndent()
                 } else {
@@ -515,6 +532,11 @@ class MainViewModel(
                         - address: O endereço físico completo constante no cartão. Se não houver, deixe vazio "".
                         - observations: Serviços, especialidades, horários e TUDO O QUE FOR ESCRITO À MÃO POR UM HUMANO A CANETA (anotações manuscritas). REGRA MANDATÓRIA DE LABELS: Qualquer rótulo ou palavra que apareça acima ou antes de um dado (ex: 'WhatsApp', 'Telefone', 'Tel', 'Fixo', 'Celular', 'Instagram', 'E-mail', 'Endereço', etc.) serve EXCLUSIVAMENTE para distinguir o tipo do campo e NUNCA deve ser colocado no campo de observações. Apenas coloque em observações o que realmente NÃO for campo, label ou dado estruturado encontrado anteriormente.
                         - instagram: Perfil ou @ do Instagram (exemplo: '@DYNASTY_FUT'). ATENÇÃO CRUCIAL AO SÍMBOLO '@': Muitas fontes estilizadas desenham o arroba '@' parecido com a letra 'e' minúscula ou 'eDYNASTY_FUT'. O perfil do Instagram NUNCA deve vir com a letra 'e' no lugar do '@'. O handle correto SEMPRE deve ser '@DYNASTY_FUT'. Se não houver, deixe vazio "".
+                        - facebook: Perfil ou página do Facebook, identificado pelo ÍCONE do Facebook (a letra 'f' branca em círculo ou quadrado azul) ou pelo rótulo 'Facebook', 'Face', 'FB' ou 'fb.com/'. Exemplo: 'América Rio das Ostras' ou 'fb.com/minhaempresa'. Retorne só o nome da página/usuário ou o link, SEM o rótulo. Se não houver, deixe vazio "".
+                        REGRA DE ÍCONES: identifique cada dado PELO ÍCONE ao lado quando não houver rótulo escrito: balão verde com telefone = WhatsApp; câmera/quadrado arredondado com círculo = Instagram; letra 'f' = Facebook; pino de mapa = endereço; envelope = e-mail; aparelho de telefone = telefone fixo. Texto ao lado de um ícone pertence ao campo desse ícone.
+                        REGRA DE LEITURA: o texto pode estar em fundo colorido, com contraste baixo, sombra ou perspectiva; leia mesmo assim. Corrija confusões de OCR entre o número 0 e a letra O dentro de palavras (ex.: 'MICR0' deve ser 'MICRO'). Preserve acentos.
+                        REGRA DO TÍTULO: name é apenas o título/marca principal em destaque no topo. Subtítulos menores logo abaixo que indicam cidade ou bairro (ex.: 'RIO DAS OSTRAS') NÃO fazem parte do name; coloque-os em observations. Complementos que formam a marca (ex.: 'Clínica de Saúde' junto de 'AVIVAR') continuam no name.
+                        REGRA DE OBSERVAÇÕES: em observations coloque TODAS as demais informações sem rótulo de campo: serviços, produtos, categorias (ex.: 'Manutenção em geral e acessórios', 'Celulares, Notebooks, Computadores, Tablets'), marcas atendidas (logotipos como Motorola, Nokia, Apple, Xiaomi, Samsung, LG, Asus), horários, cidade/subtítulo e anotações manuscritas, separadas por ' | '. Nunca repita aqui nome, telefones, e-mail, Instagram, Facebook ou endereço.
                         Regra: Retorne APENAS o JSON válido.
                     """.trimIndent()
                 }
@@ -535,7 +557,7 @@ class MainViewModel(
                     )
                 )
 
-                val modelsToTry = listOf("gemini-2.5-flash", "gemini-3.5-flash")
+                val modelsToTry = listOf("gemini-3.5-flash", "gemini-2.5-flash")
                 var responseText: String? = null
                 var lastException: Throwable? = null
 
@@ -600,6 +622,7 @@ class MainViewModel(
                         parsedLandlinePhone = ensurePhoneDdd(parsed.landlinePhone ?: "", parsedAddress)
                         parsedEmail = parsed.email ?: ""
                         parsedInstagram = OfflineCardScanner.cleanInstagramHandle(parsed.instagram ?: "", parsedName + " " + parsedAddress)
+                        parsedFacebook = cleanFacebookValue(parsed.facebook ?: "")
                         parsedObservations = sanitizeObservations(
                             rawObservations = parsed.observations ?: "",
                             name = parsedName,
@@ -608,6 +631,7 @@ class MainViewModel(
                             landlinePhone = parsedLandlinePhone,
                             email = parsedEmail,
                             instagram = parsedInstagram,
+                            facebook = parsedFacebook,
                             address = parsedAddress
                         )
                         scanEngine = "gemini"
@@ -672,8 +696,10 @@ class MainViewModel(
     }
 
     // Save contact to native system Contacts list only
-    fun saveContact(useWhatsAppBusiness: Boolean, instagramFollowed: Boolean) {
-        viewModelScope.launch(Dispatchers.IO) {
+    fun saveContact(useWhatsAppBusiness: Boolean, instagramFollowed: Boolean, onDone: () -> Unit = {}) {
+        if (isSaving) return
+        isSaving = true
+        val saveJob = viewModelScope.launch(Dispatchers.IO) {
             val context = getApplication<Application>()
             if (ContactSystemSync.hasContactsPermissions(context)) {
                 ContactSystemSync.insertSystemContact(
@@ -685,6 +711,7 @@ class MainViewModel(
                     email = parsedEmail,
                     address = parsedAddress,
                     instagram = parsedInstagram,
+                    facebook = parsedFacebook,
                     observations = parsedObservations,
                     imageBase64 = capturedImageBase64 ?: "",
                     backImageBase64 = backImageBase64 ?: "",
@@ -699,13 +726,18 @@ class MainViewModel(
             withContext(Dispatchers.Main) {
                 clearScannedState()
                 showingManualAdd = false
+                isSaving = false
+                onDone()
             }
         }
+        // Garante que o overlay some mesmo se a gravacao falhar
+        saveJob.invokeOnCompletion { isSaving = false }
     }
 
     // Save edited Contact back to system contacts
     fun saveEditedContact(contact: ContactEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
+        isSaving = true
+        val saveJob = viewModelScope.launch(Dispatchers.IO) {
             val context = getApplication<Application>()
             if (ContactSystemSync.hasContactsPermissions(context)) {
                 if (contact.id > 0) {
@@ -719,6 +751,7 @@ class MainViewModel(
                         email = contact.email,
                         address = contact.address,
                         instagram = contact.instagram,
+                        facebook = contact.facebook,
                         observations = contact.observations,
                         imageBase64 = contact.imageBase64,
                         backImageBase64 = contact.backImageBase64,
@@ -736,6 +769,7 @@ class MainViewModel(
                         email = contact.email,
                         address = contact.address,
                         instagram = contact.instagram,
+                        facebook = contact.facebook,
                         observations = contact.observations,
                         imageBase64 = contact.imageBase64,
                         backImageBase64 = contact.backImageBase64,
@@ -750,8 +784,11 @@ class MainViewModel(
             withContext(Dispatchers.Main) {
                 selectedContact = contact
                 editModeActive = false
+                isSaving = false
             }
         }
+        // Garante que o overlay some mesmo se a gravacao falhar
+        saveJob.invokeOnCompletion { isSaving = false }
     }
 
     // Delete contact from system contacts
@@ -865,6 +902,11 @@ class MainViewModel(
         return trimmed
     }
 
+    // Facebook: aceita nome da pagina, @usuario ou link; devolve o texto limpo
+    fun cleanFacebookValue(raw: String): String {
+        return raw.trim().replace(Regex("""\s+"""), " ").take(120)
+    }
+
     fun normalizeContactTitle(name: String): String {
         val trimmed = name.trim()
         val lower = trimmed.lowercase(Locale.ROOT)
@@ -912,6 +954,7 @@ class MainViewModel(
         landlinePhone: String,
         email: String,
         instagram: String,
+        facebook: String = "",
         address: String
     ): String {
         if (rawObservations.isBlank()) return ""
@@ -937,12 +980,13 @@ class MainViewModel(
 
             // Se contiver números de telefone
             val digits = trimmed.replace(Regex("""\D"""), "")
-            if (digits.length in 8..13 || cleanPhones.any { it.isNotEmpty() && (digits.contains(it) || it.contains(digits)) }) continue
+            if (digits.length in 8..13 || (digits.length >= 6 && cleanPhones.any { it.isNotEmpty() && (digits.contains(it) || it.contains(digits)) })) continue
 
             // Se for endereço ou email ou instagram
             if (address.isNotBlank() && (address.contains(trimmed, ignoreCase = true) || trimmed.contains(address, ignoreCase = true))) continue
             if (email.isNotBlank() && (lower.contains(email.lowercase(Locale.ROOT)) || email.lowercase(Locale.ROOT).contains(lower))) continue
             if (instagram.isNotBlank() && lower.contains(instagram.lowercase(Locale.ROOT).replace("@", ""))) continue
+            if (facebook.isNotBlank() && (lower.contains(facebook.lowercase(Locale.ROOT)) || facebook.lowercase(Locale.ROOT).contains(lower))) continue
 
             // Se for prefixo de label com valor, ex: "WhatsApp: ..."
             val strippedPrefix = trimmed.replace(Regex("""^(?:whatsapp|whats|zap|wpp|celular|cel|telefone|tel|fixo|fone|instagram|insta|email|e-mail|endereço|endereco|site|website)[\s:\-._–—]*""", RegexOption.IGNORE_CASE), "").trim()

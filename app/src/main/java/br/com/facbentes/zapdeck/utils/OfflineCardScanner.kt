@@ -189,6 +189,12 @@ object OfflineCardScanner {
                 else -> ""
             }
 
+            val finalFacebook = when {
+                !frontContact.facebook.isNullOrBlank() -> frontContact.facebook
+                !backContact.facebook.isNullOrBlank() -> backContact.facebook
+                else -> ""
+            }
+
             // Observations: front observations + back observations + handwritten / unassigned back text
             val backNotesList = mutableListOf<String>()
             if (!backContact.observations.isNullOrBlank()) {
@@ -223,7 +229,8 @@ object OfflineCardScanner {
                 email = finalEmail,
                 address = finalAddress,
                 observations = finalObservations,
-                instagram = finalInstagram
+                instagram = finalInstagram,
+                facebook = finalFacebook
             )
         } catch (e: Exception) {
             Log.e(TAG, "Erro no reconhecimento de texto offline: ${e.message}", e)
@@ -237,12 +244,14 @@ object OfflineCardScanner {
 
         visionText.textBlocks.forEach { block ->
             block.lines.forEach { line ->
-                val trimmed = line.text.trim()
+                val trimmed = fixZeroLetterConfusion(line.text.trim())
                 if (trimmed.isNotEmpty()) {
                     allLines.add(trimmed)
                 }
             }
         }
+
+        Log.d(TAG, "Linhas OCR: " + allLines.joinToString(" ⏎ "))
 
         // 1. Phone numbers separation (WhatsApp vs Landline / Common phone)
         val phoneResult = extractClassifiedPhones(allLines)
@@ -256,14 +265,20 @@ object OfflineCardScanner {
         // 2.1 Email extraction
         val email = extractEmail(allLines, fullText)
 
+        // 2.2 Facebook extraction (link, rotulo ou icone 'f' lido junto do Instagram)
+        val facebook = extractFacebook(allLines, fullText, instagram)
+
         // 3. Address extraction (deducing start via Av., Rua, Logradouro, etc. and assembling full continuation)
         val address = extractAddress(visionText, allLines)
 
         // 4. Name extraction (title deduction by position, disposition, and drawing emphasis)
-        val name = extractName(visionText, allLines, primaryPhone, secondaryPhone, landlinePhone, instagram, address)
+        val name = fixZeroLetterConfusion(extractName(visionText, allLines, primaryPhone, secondaryPhone, landlinePhone, instagram, address))
 
         // 5. Observations / Services extraction (e.g. 'Entrega em domicílio', strictly separated from address)
-        val observations = extractObservations(visionText, allLines, name, primaryPhone, secondaryPhone, landlinePhone, email, instagram, address)
+        val observations = fixZeroLetterConfusion(
+            extractObservations(visionText, allLines, name, primaryPhone, secondaryPhone, landlinePhone, email, instagram, address, facebook)
+        )
+        Log.d(TAG, "Resultado: nome=$name | insta=$instagram | face=$facebook | endereco=$address | obs=$observations")
 
         return ParsedContact(
             name = name,
@@ -273,8 +288,60 @@ object OfflineCardScanner {
             email = email,
             address = address,
             observations = observations,
-            instagram = instagram
+            instagram = instagram,
+            facebook = facebook
         )
+    }
+
+    /**
+     * Corrige confusao de OCR entre o numero 0 e a letra O dentro de palavras (ex.: 'MICR0' -> 'MICRO').
+     * Nao mexe em sequencias numericas puras (telefones, numeros de endereco).
+     */
+    fun fixZeroLetterConfusion(text: String): String {
+        return text.replace(Regex("""(?<=\p{L})0(?!\d)|(?<!\d)0(?=\p{L})""")) { match ->
+            val prev = match.range.first - 1
+            val upperContext = (prev >= 0 && text[prev].isUpperCase()) ||
+                (match.range.last + 1 < text.length && text[match.range.last + 1].isUpperCase())
+            if (upperContext) "O" else "o"
+        }
+    }
+
+    /**
+     * Extrai o Facebook: link facebook.com/fb.com, linha com rotulo Facebook/Face/FB e,
+     * como o icone 'f' nao e lido pelo OCR, a linha de texto logo acima do Instagram.
+     */
+    private fun extractFacebook(lines: List<String>, fullText: String, instagram: String): String {
+        val urlMatch = Regex("""(?:facebook|fb)\.com/([a-zA-Z0-9._\-]{2,60})""", RegexOption.IGNORE_CASE).find(fullText)
+        if (urlMatch != null) return urlMatch.groupValues[1]
+
+        for (i in lines.indices) {
+            val line = lines[i]
+            if (!Regex("""(?i)^\W*(facebook|face|fb)\b""").containsMatchIn(line)) continue
+            val onLine = line.replace(Regex("""(?i)^\W*(facebook|face|fb)\b[\s:\-/.]*"""), "").trim()
+            if (onLine.length >= 3) return onLine
+            if (i + 1 < lines.size) {
+                val next = lines[i + 1].trim()
+                if (next.length >= 3 && !isFieldLabel(next)) return next
+            }
+        }
+
+        // Icone 'f' do Facebook costuma vir logo acima do icone do Instagram (lido como '@ perfil')
+        if (instagram.isNotBlank()) {
+            val handle = instagram.removePrefix("@").lowercase(Locale.ROOT)
+            val igIndex = lines.indexOfFirst { it.lowercase(Locale.ROOT).replace(" ", "").contains(handle) }
+            if (igIndex > 0) {
+                val prev = lines[igIndex - 1].trim()
+                val looksLikeName = prev.length in 4..60 &&
+                    prev.none { it.isDigit() } &&
+                    prev.any { it.isLetter() } &&
+                    !prev.contains("@") &&
+                    !isAddressLine(prev) &&
+                    !isFieldLabel(prev) &&
+                    !isInstructionPrompt(prev.lowercase(Locale.ROOT))
+                if (looksLikeName) return prev
+            }
+        }
+        return ""
     }
 
     fun extractEmail(allLines: List<String>, fullText: String): String {
@@ -310,6 +377,14 @@ object OfflineCardScanner {
      */
     fun extractClassifiedPhonesForTest(lines: List<String>): PhoneExtractionResult {
         return extractClassifiedPhones(lines)
+    }
+
+    fun extractFacebookForTest(lines: List<String>, fullText: String, instagram: String): String {
+        return extractFacebook(lines, fullText, instagram)
+    }
+
+    fun extractObservationsForTest(lines: List<String>, name: String, phones: List<String>, instagram: String, address: String, facebook: String): String {
+        return extractObservations(null, lines, name, phones.getOrElse(0) { "" }, phones.getOrElse(1) { "" }, phones.getOrElse(2) { "" }, "", instagram, address, facebook)
     }
 
     fun extractInstagramForTest(lines: List<String>, fullText: String): String {
@@ -529,7 +604,7 @@ object OfflineCardScanner {
      */
     private fun extractInstagram(lines: List<String>, fullText: String): String {
         // 1. Busca direta por @handle
-        val atRegex = Regex("""@([a-zA-Z0-9._]{2,30})""")
+        val atRegex = Regex("""(?<![\w.])@\s*([a-zA-Z0-9._]{2,30})""")
         val atMatch = atRegex.find(fullText)
         if (atMatch != null) {
             val user = atMatch.groupValues[1]
@@ -1094,7 +1169,7 @@ object OfflineCardScanner {
      * and strictly excludes field labels, address parts, contact names, phones, and links.
      */
     private fun extractObservations(
-        visionText: Text,
+        visionText: Text?,
         allLines: List<String>,
         name: String,
         primaryPhone: String,
@@ -1102,7 +1177,8 @@ object OfflineCardScanner {
         landlinePhone: String,
         email: String,
         instagram: String,
-        address: String
+        address: String,
+        facebook: String = ""
     ): String {
         val cleanPhones = listOf(primaryPhone, secondaryPhone, landlinePhone)
             .map { it.replace(Regex("""\D"""), "") }
@@ -1127,7 +1203,7 @@ object OfflineCardScanner {
             // 3. Rejeita qualquer linha que contenha número de telefone
             val digits = trimmed.replace(Regex("""\D"""), "")
             if (digits.length in 8..13 || isPhoneLine(trimmed, cleanPhones) || isRealPhoneNumberLine(trimmed)) continue
-            if (cleanPhones.any { it.isNotEmpty() && (digits.contains(it) || it.contains(digits)) }) continue
+            if (digits.length >= 6 && cleanPhones.any { it.isNotEmpty() && (digits.contains(it) || it.contains(digits)) }) continue
 
             // 4. Rejeita se for endereço ou continuação de endereço
             if (address.isNotEmpty() && (address.contains(trimmed, ignoreCase = true) || trimmed.contains(address, ignoreCase = true))) continue
@@ -1136,6 +1212,9 @@ object OfflineCardScanner {
             // 5. Rejeita email ou instagram
             if (email.isNotEmpty() && (lower.contains(email.lowercase(Locale.ROOT)) || email.lowercase(Locale.ROOT).contains(lower))) continue
             if (instagram.isNotEmpty() && lower.contains(instagram.lowercase(Locale.ROOT).replace("@", ""))) continue
+
+            // 5.1 Rejeita a linha do Facebook
+            if (facebook.isNotEmpty() && lower.contains(facebook.lowercase(Locale.ROOT))) continue
 
             // 6. Rejeita instruções operacionais
             if (isInstructionPrompt(lower)) continue

@@ -644,6 +644,26 @@ fun ScanReviewLayout(
                 )
             }
 
+            // Facebook
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Facebook (página, perfil ou link):",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Slate800
+                )
+                OutlinedTextField(
+                    value = viewModel.parsedFacebook,
+                    onValueChange = { viewModel.parsedFacebook = it },
+                    placeholder = { Text("Nome da página ou link", color = Slate400) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = zapDeckTextFieldColors(),
+                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF1877F2)) },
+                    supportingText = { Text("Página de Facebook extraída do cartão de visita.") }
+                )
+            }
+
             // Endereço
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
@@ -940,6 +960,7 @@ fun ScanReviewLayout(
             ) {
                 OutlinedButton(
                     onClick = onBack,
+                    enabled = !viewModel.isSaving,
                     modifier = Modifier
                         .weight(1f)
                         .height(48.dp),
@@ -963,41 +984,54 @@ fun ScanReviewLayout(
                             val isBusiness = sendViaBusiness
                             val instagramHandle = viewModel.parsedInstagram
 
-                            viewModel.saveContact(isBusiness, followOnInstagram)
-                            Toast.makeText(context, "Contato salvo com sucesso!", Toast.LENGTH_SHORT).show()
-                            onSaved()
+                            // Só confirma, volta à lista e abre WhatsApp/Instagram DEPOIS que a agenda terminou de gravar
+                            viewModel.saveContact(isBusiness, followOnInstagram) {
+                                Toast.makeText(context, "Contato salvo com sucesso!", Toast.LENGTH_SHORT).show()
+                                onSaved()
 
-                            if (shouldOpenWhatsApp) {
-                                if (phone.isNotBlank()) {
-                                    MessagingIntegrationHelper.openWhatsAppChat(context, phone, msgToSubmit, isBusiness)
-                                } else {
-                                    Toast.makeText(context, "Contato salvo, mas sem telefone para envio do WhatsApp.", Toast.LENGTH_LONG).show()
-                                }
-                            }
-
-                            if (followOnInstagram && instagramHandle.isNotBlank()) {
-                                scope.launch {
-                                    val exists = MessagingIntegrationHelper.checkIfInstagramUserExists(instagramHandle)
-                                    if (exists) {
-                                        MessagingIntegrationHelper.openInstagramProfile(context, instagramHandle)
+                                if (shouldOpenWhatsApp) {
+                                    if (phone.isNotBlank()) {
+                                        MessagingIntegrationHelper.openWhatsAppChat(context, phone, msgToSubmit, isBusiness)
                                     } else {
-                                        Toast.makeText(
-                                            context,
-                                            "O contato $instagramHandle do Instagram não existe!",
-                                            Toast.LENGTH_LONG
-                                        ).show()
+                                        Toast.makeText(context, "Contato salvo, mas sem telefone para envio do WhatsApp.", Toast.LENGTH_LONG).show()
+                                    }
+                                }
+
+                                if (followOnInstagram && instagramHandle.isNotBlank()) {
+                                    scope.launch {
+                                        val exists = MessagingIntegrationHelper.checkIfInstagramUserExists(instagramHandle)
+                                        if (exists) {
+                                            MessagingIntegrationHelper.openInstagramProfile(context, instagramHandle)
+                                        } else {
+                                            Toast.makeText(
+                                                context,
+                                                "O contato $instagramHandle do Instagram não existe!",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        }
                                     }
                                 }
                             }
                         }
                     },
+                    enabled = !viewModel.isSaving,
                     modifier = Modifier
                         .weight(1f)
                         .height(48.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                 ) {
-                    Text("Salvar Registro")
+                    if (viewModel.isSaving) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Salvando...")
+                    } else {
+                        Text("Salvar Registro")
+                    }
                 }
             }
 
@@ -1009,6 +1043,7 @@ fun ScanReviewLayout(
                 viewModel.parsedSecondaryPhone,
                 viewModel.parsedAddress,
                 viewModel.parsedInstagram,
+                viewModel.parsedFacebook,
                 viewModel.parsedObservations
             ) {
                 ContactEntity(
@@ -1018,6 +1053,7 @@ fun ScanReviewLayout(
                     secondaryPhone = viewModel.parsedSecondaryPhone,
                     address = viewModel.parsedAddress,
                     instagram = viewModel.parsedInstagram,
+                    facebook = viewModel.parsedFacebook,
                     observations = viewModel.parsedObservations,
                     imageBase64 = viewModel.capturedImageBase64 ?: ""
                 )

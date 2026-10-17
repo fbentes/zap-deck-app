@@ -83,7 +83,8 @@ object ContactSystemSync {
         instagramFollowed: Boolean = false,
         landlinePhone: String = "",
         email: String = "",
-        backImageBase64: String = ""
+        backImageBase64: String = "",
+        facebook: String = ""
     ): Long? {
         val resolver = context.contentResolver
         val ops = ArrayList<ContentProviderOperation>()
@@ -179,6 +180,9 @@ object ContactSystemSync {
             }
             if (instagram.isNotBlank()) {
                 append("Instagram: $instagram\n")
+            }
+            if (facebook.isNotBlank()) {
+                append("Facebook: $facebook\n")
             }
             if (useWhatsAppBusiness) {
                 append("PreferWhatsAppBusiness: true\n")
@@ -341,6 +345,7 @@ object ContactSystemSync {
             }
 
             var finalInstagram = ""
+            var finalFacebook = ""
             var finalUseWhatsAppBusiness = false
             var finalObservations = ""
             var finalInstagramFollowed = false
@@ -367,6 +372,8 @@ object ContactSystemSync {
                         finalEmail = trimLine.substringAfter("Email:").trim()
                     } else if (trimLine.startsWith("Instagram:")) {
                         finalInstagram = trimLine.substringAfter("Instagram:").trim()
+                    } else if (trimLine.startsWith("Facebook:")) {
+                        finalFacebook = trimLine.substringAfter("Facebook:").trim()
                     } else if (trimLine.startsWith("PreferWhatsAppBusiness:")) {
                         finalUseWhatsAppBusiness = trimLine.substringAfter("PreferWhatsAppBusiness:").trim().toBoolean()
                     } else if (trimLine.startsWith("InstagramFollowed:")) {
@@ -399,7 +406,8 @@ object ContactSystemSync {
                     createdAt = finalCreatedAt,
                     instagram = finalInstagram,
                     useWhatsAppBusiness = finalUseWhatsAppBusiness,
-                    instagramFollowed = finalInstagramFollowed
+                    instagramFollowed = finalInstagramFollowed,
+                    facebook = finalFacebook
                 )
             )
         }
@@ -426,7 +434,8 @@ object ContactSystemSync {
         landlinePhone: String = "",
         email: String = "",
         backImageBase64: String = "",
-        createdAt: Long = System.currentTimeMillis()
+        createdAt: Long = System.currentTimeMillis(),
+        facebook: String = ""
     ): Boolean {
         if (!hasContactsPermissions(context)) return false
         val resolver = context.contentResolver
@@ -520,6 +529,9 @@ object ContactSystemSync {
             }
             if (instagram.isNotBlank()) {
                 append("Instagram: $instagram\n")
+            }
+            if (facebook.isNotBlank()) {
+                append("Facebook: $facebook\n")
             }
             if (useWhatsAppBusiness) {
                 append("PreferWhatsAppBusiness: true\n")

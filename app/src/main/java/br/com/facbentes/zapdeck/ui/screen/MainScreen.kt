@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import br.com.facbentes.zapdeck.ui.SavingOverlay
 import br.com.facbentes.zapdeck.R
 import br.com.facbentes.zapdeck.ui.ProcessingCardAnimation
 import br.com.facbentes.zapdeck.ui.ReceiveCardImportDialog
@@ -132,6 +133,7 @@ fun MainScreen(viewModel: MainViewModel) {
                         address = if (viewModel.parsedAddress.isNotBlank()) viewModel.parsedAddress else existing.address,
                         observations = if (viewModel.parsedObservations.isNotBlank()) viewModel.parsedObservations else existing.observations,
                         instagram = if (viewModel.parsedInstagram.isNotBlank()) viewModel.parsedInstagram else existing.instagram,
+                        facebook = if (viewModel.parsedFacebook.isNotBlank()) viewModel.parsedFacebook else existing.facebook,
                         imageBase64 = viewModel.capturedImageBase64 ?: existing.imageBase64
                     )
                     viewModel.selectedContact = merged
@@ -432,6 +434,9 @@ fun MainScreen(viewModel: MainViewModel) {
                         }
                     )
                 }
+            }
+            if (viewModel.isSaving) {
+                SavingOverlay()
             }
             if (showIconSelectionDialog) {
                 IconSelectionDialog(

@@ -78,6 +78,7 @@ fun EditContactDialog(
     var landlinePhone by remember { mutableStateOf(contact.landlinePhone) }
     var email by remember { mutableStateOf(contact.email) }
     var instagram by remember { mutableStateOf(contact.instagram) }
+    var facebook by remember { mutableStateOf(contact.facebook) }
     var address by remember { mutableStateOf(contact.address) }
     var observations by remember { mutableStateOf(contact.observations) }
     var useWhatsAppBusiness by remember { mutableStateOf(contact.useWhatsAppBusiness) }
@@ -153,6 +154,7 @@ fun EditContactDialog(
                                             landlinePhone = landlinePhone,
                                             email = email,
                                             instagram = instagram,
+                                            facebook = facebook,
                                             address = address,
                                             observations = observations,
                                             useWhatsAppBusiness = useWhatsAppBusiness,
@@ -296,6 +298,25 @@ fun EditContactDialog(
                         shape = RoundedCornerShape(8.dp),
                         colors = zapDeckTextFieldColors(),
                         leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFFE1306C)) }
+                    )
+                }
+
+                // Facebook
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        text = "Facebook:",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Slate800
+                    )
+                    OutlinedTextField(
+                        value = facebook,
+                        onValueChange = { facebook = it },
+                        placeholder = { Text("Nome da página ou link", color = Slate400) },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = zapDeckTextFieldColors(),
+                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF1877F2)) }
                     )
                 }
 
