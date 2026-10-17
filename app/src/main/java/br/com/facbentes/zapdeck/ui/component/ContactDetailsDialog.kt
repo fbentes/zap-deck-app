@@ -289,6 +289,15 @@ fun ContactDetailsDialog(
                     )
                 }
 
+                if (contact.facebook.isNotEmpty()) {
+                    DetailTextItem(
+                        icon = Icons.Default.Person,
+                        label = "Facebook:",
+                        value = contact.facebook,
+                        iconColor = Color(0xFF1877F2)
+                    )
+                }
+
                 if (contact.observations.isNotEmpty()) {
                     DetailTextItem(icon = Icons.Default.Info, label = "Serviços / Observações:", value = contact.observations)
                 }

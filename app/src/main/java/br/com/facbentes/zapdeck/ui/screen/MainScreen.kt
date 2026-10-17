@@ -132,6 +132,7 @@ fun MainScreen(viewModel: MainViewModel) {
                         address = if (viewModel.parsedAddress.isNotBlank()) viewModel.parsedAddress else existing.address,
                         observations = if (viewModel.parsedObservations.isNotBlank()) viewModel.parsedObservations else existing.observations,
                         instagram = if (viewModel.parsedInstagram.isNotBlank()) viewModel.parsedInstagram else existing.instagram,
+                        facebook = if (viewModel.parsedFacebook.isNotBlank()) viewModel.parsedFacebook else existing.facebook,
                         imageBase64 = viewModel.capturedImageBase64 ?: existing.imageBase64
                     )
                     viewModel.selectedContact = merged

@@ -51,5 +51,6 @@ data class ParsedContact(
     @Json(name = "email") val email: String? = null,
     @Json(name = "address") val address: String? = null,
     @Json(name = "observations") val observations: String? = null,
-    @Json(name = "instagram") val instagram: String? = null
+    @Json(name = "instagram") val instagram: String? = null,
+    @Json(name = "facebook") val facebook: String? = null
 )

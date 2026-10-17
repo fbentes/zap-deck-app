@@ -644,6 +644,26 @@ fun ScanReviewLayout(
                 )
             }
 
+            // Facebook
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Facebook (página, perfil ou link):",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Slate800
+                )
+                OutlinedTextField(
+                    value = viewModel.parsedFacebook,
+                    onValueChange = { viewModel.parsedFacebook = it },
+                    placeholder = { Text("Nome da página ou link", color = Slate400) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = zapDeckTextFieldColors(),
+                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF1877F2)) },
+                    supportingText = { Text("Página de Facebook extraída do cartão de visita.") }
+                )
+            }
+
             // Endereço
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
@@ -1009,6 +1029,7 @@ fun ScanReviewLayout(
                 viewModel.parsedSecondaryPhone,
                 viewModel.parsedAddress,
                 viewModel.parsedInstagram,
+                viewModel.parsedFacebook,
                 viewModel.parsedObservations
             ) {
                 ContactEntity(
@@ -1018,6 +1039,7 @@ fun ScanReviewLayout(
                     secondaryPhone = viewModel.parsedSecondaryPhone,
                     address = viewModel.parsedAddress,
                     instagram = viewModel.parsedInstagram,
+                    facebook = viewModel.parsedFacebook,
                     observations = viewModel.parsedObservations,
                     imageBase64 = viewModel.capturedImageBase64 ?: ""
                 )

@@ -18,5 +18,6 @@ data class ContactEntity(
     val createdAt: Long = System.currentTimeMillis(),
     val instagram: String = "",
     val useWhatsAppBusiness: Boolean = false,
-    val instagramFollowed: Boolean = false
+    val instagramFollowed: Boolean = false,
+    val facebook: String = ""
 )
