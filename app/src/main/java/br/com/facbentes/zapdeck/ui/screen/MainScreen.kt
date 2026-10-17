@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import br.com.facbentes.zapdeck.ui.SavingOverlay
 import br.com.facbentes.zapdeck.R
 import br.com.facbentes.zapdeck.ui.ProcessingCardAnimation
 import br.com.facbentes.zapdeck.ui.ReceiveCardImportDialog
@@ -433,6 +434,9 @@ fun MainScreen(viewModel: MainViewModel) {
                         }
                     )
                 }
+            }
+            if (viewModel.isSaving) {
+                SavingOverlay()
             }
             if (showIconSelectionDialog) {
                 IconSelectionDialog(

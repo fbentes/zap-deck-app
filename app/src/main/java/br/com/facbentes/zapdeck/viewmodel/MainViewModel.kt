@@ -134,6 +134,10 @@ class MainViewModel(
     var parsedInstagram by mutableStateOf("")
     var parsedFacebook by mutableStateOf("")
 
+    // true enquanto o contato esta sendo gravado na agenda do celular (mostra o overlay de salvando)
+    var isSaving by mutableStateOf(false)
+        private set
+
     // List of states for viewing/editing saved contacts
     var showingManualAdd by mutableStateOf(false)
     var selectedContact by mutableStateOf<ContactEntity?>(null)
@@ -692,8 +696,10 @@ class MainViewModel(
     }
 
     // Save contact to native system Contacts list only
-    fun saveContact(useWhatsAppBusiness: Boolean, instagramFollowed: Boolean) {
-        viewModelScope.launch(Dispatchers.IO) {
+    fun saveContact(useWhatsAppBusiness: Boolean, instagramFollowed: Boolean, onDone: () -> Unit = {}) {
+        if (isSaving) return
+        isSaving = true
+        val saveJob = viewModelScope.launch(Dispatchers.IO) {
             val context = getApplication<Application>()
             if (ContactSystemSync.hasContactsPermissions(context)) {
                 ContactSystemSync.insertSystemContact(
@@ -720,13 +726,18 @@ class MainViewModel(
             withContext(Dispatchers.Main) {
                 clearScannedState()
                 showingManualAdd = false
+                isSaving = false
+                onDone()
             }
         }
+        // Garante que o overlay some mesmo se a gravacao falhar
+        saveJob.invokeOnCompletion { isSaving = false }
     }
 
     // Save edited Contact back to system contacts
     fun saveEditedContact(contact: ContactEntity) {
-        viewModelScope.launch(Dispatchers.IO) {
+        isSaving = true
+        val saveJob = viewModelScope.launch(Dispatchers.IO) {
             val context = getApplication<Application>()
             if (ContactSystemSync.hasContactsPermissions(context)) {
                 if (contact.id > 0) {
@@ -773,8 +784,11 @@ class MainViewModel(
             withContext(Dispatchers.Main) {
                 selectedContact = contact
                 editModeActive = false
+                isSaving = false
             }
         }
+        // Garante que o overlay some mesmo se a gravacao falhar
+        saveJob.invokeOnCompletion { isSaving = false }
     }
 
     // Delete contact from system contacts
